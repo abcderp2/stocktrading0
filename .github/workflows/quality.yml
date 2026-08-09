@@ -50,9 +50,12 @@ jobs:
 
       - name: Check JavaScript syntax
         run: |
-          for file in assets/js/*.js; do
+          for file in assets/js/*.js scripts/smoke_test.js; do
             node --check "$file"
           done
+
+      - name: Run market and storage smoke tests
+        run: node scripts/smoke_test.js
 
       - name: Run security audit
         run: python3 -I scripts/security_audit.py --history
