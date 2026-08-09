@@ -1,0 +1,61 @@
+name: Quality checks
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: stocktrading0-quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash --noprofile --norc -euo pipefail {0}
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 8
+    steps:
+      - name: Check out triggering revision without an external action
+        env:
+          REPOSITORY: ${{ github.repository }}
+          REF: ${{ github.ref }}
+          EXPECTED_SHA: ${{ github.sha }}
+          SERVER_URL: ${{ github.server_url }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          umask 077
+          git init .
+          git remote add origin "${SERVER_URL}/${REPOSITORY}.git"
+          auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 -w0)"
+          git config --local http.https://github.com/.extraheader "AUTHORIZATION: basic ${auth}"
+          git fetch --no-tags --prune origin "${REF}" '+refs/heads/*:refs/remotes/origin/*'
+          git config --local --unset-all http.https://github.com/.extraheader
+          unset auth GH_TOKEN
+          git checkout --detach "${EXPECTED_SHA}"
+          test "$(git rev-parse HEAD)" = "${EXPECTED_SHA}"
+
+      - name: Enforce workflow policy
+        run: python3 -I scripts/workflow_policy.py
+
+      - name: Check static site structure
+        run: python3 -I scripts/check_site.py
+
+      - name: Check JavaScript syntax
+        run: |
+          for file in assets/js/*.js scripts/smoke_test.js; do
+            node --check "$file"
+          done
+
+      - name: Run market and storage smoke tests
+        run: node scripts/smoke_test.js
+
+      - name: Run security audit
+        run: python3 -I scripts/security_audit.py --history

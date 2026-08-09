@@ -1,0 +1,304 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="description" content="架空企業と架空相場を自由に作り、チャートと模擬売買で遊べるローカル完結型の株式市場サンドボックスです。">
+  <meta name="robots" content="index,follow">
+  <meta name="referrer" content="no-referrer">
+  <meta name="color-scheme" content="light dark">
+  <meta name="theme-color" content="#111827">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Stock Trading 0 | 架空株式市場サンドボックス">
+  <meta property="og:description" content="実在の株価を使わず、会社も相場もルールも自分で作る株式市場の実験箱。">
+  <meta property="og:url" content="https://abcderp2.github.io/stocktrading0/">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; media-src 'none'; worker-src 'none'">
+  <title>Stock Trading 0 | 架空株式市場サンドボックス</title>
+  <link rel="canonical" href="https://abcderp2.github.io/stocktrading0/">
+  <link rel="stylesheet" href="assets/css/style.css">
+  <script defer src="assets/js/market-engine.js"></script>
+  <script defer src="assets/js/chart.js"></script>
+  <script defer src="assets/js/storage.js"></script>
+  <script defer src="assets/js/app.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">メインへ移動</a>
+
+  <header class="site-header">
+    <div>
+      <p class="eyebrow">FICTIONAL MARKET SANDBOX</p>
+      <h1>Stock Trading 0</h1>
+      <p class="lead">実在の株価を使わず、会社も相場もルールも自分で作る株式市場の実験箱。</p>
+    </div>
+    <div class="status-stack" aria-live="polite">
+      <span id="save-status" class="status-pill">端末内に自動保存</span>
+      <span class="status-pill">外部通信なし</span>
+    </div>
+  </header>
+
+  <main id="main" class="app-shell">
+    <section class="panel market-panel" aria-labelledby="market-title">
+      <div class="section-heading">
+        <div>
+          <p class="kicker">WORLD</p>
+          <h2 id="market-title">市場を動かす</h2>
+        </div>
+        <span id="day-label" class="big-number">Day 1</span>
+      </div>
+
+      <div class="button-grid compact-grid" aria-label="時間操作">
+        <button id="step-1" type="button">1日進む</button>
+        <button id="step-5" type="button">5日進む</button>
+        <button id="step-20" type="button">20日進む</button>
+        <button id="toggle-play" type="button" aria-pressed="false">自動再生</button>
+      </div>
+
+      <label class="field">
+        <span>自動再生速度</span>
+        <select id="play-speed">
+          <option value="1200">ゆっくり</option>
+          <option value="650" selected>標準</option>
+          <option value="300">速い</option>
+        </select>
+      </label>
+
+      <label class="field range-field">
+        <span>市場心理 <output id="mood-value">0</output></span>
+        <input id="market-mood" type="range" min="-100" max="100" step="1" value="0">
+        <small>悲観から熱狂まで。全銘柄の流れに影響します。</small>
+      </label>
+
+      <label class="field range-field">
+        <span>市場の荒さ <output id="market-volatility-value">100</output>%</span>
+        <input id="market-volatility" type="range" min="10" max="300" step="5" value="100">
+        <small>各社のボラティリティへ掛ける倍率です。</small>
+      </label>
+
+      <div class="divider"></div>
+
+      <div class="section-heading slim-heading">
+        <div>
+          <p class="kicker">EVENT</p>
+          <h3>相場へ直接介入</h3>
+        </div>
+      </div>
+
+      <div class="button-grid">
+        <button class="event-button" type="button" data-shock="5">好材料 +5%</button>
+        <button class="event-button" type="button" data-shock="-5">悪材料 -5%</button>
+        <button class="event-button" type="button" data-shock="25">暴騰 +25%</button>
+        <button class="event-button" type="button" data-shock="-25">暴落 -25%</button>
+      </div>
+
+      <div class="inline-controls">
+        <label class="field grow-field">
+          <span>任意ショック</span>
+          <div class="input-with-unit">
+            <input id="custom-shock" type="number" inputmode="decimal" min="-95" max="1000" step="0.1" value="10">
+            <span>%</span>
+          </div>
+        </label>
+        <button id="apply-shock" type="button">次の日へ適用</button>
+      </div>
+    </section>
+
+    <section class="panel chart-panel" aria-labelledby="chart-title">
+      <div class="chart-header">
+        <div>
+          <p class="kicker">CHART</p>
+          <h2 id="chart-title"><span id="selected-name">読み込み中</span> <span id="selected-ticker" class="muted"></span></h2>
+        </div>
+        <div class="quote-block">
+          <strong id="current-price">¥0</strong>
+          <span id="price-change" class="muted">0.00%</span>
+        </div>
+      </div>
+
+      <div class="chart-wrap">
+        <canvas id="market-chart" role="img" aria-label="選択中の架空銘柄のローソク足チャート。横方向へドラッグして移動し、ホイールまたはピンチ操作で表示本数を変更できます。下のボタンでも操作できます。">ローソク足を描画できない環境では、下に表示される最新の始値、高値、安値、終値を利用できます。</canvas>
+        <div class="chart-help">横ドラッグで移動。ホイールまたは2本指操作で拡大縮小。ダブルタップで最新位置へ戻ります。</div>
+      </div>
+
+      <div class="chart-toolbar" aria-label="チャート操作">
+        <button id="chart-older" type="button">古い方へ</button>
+        <button id="chart-newer" type="button">新しい方へ</button>
+        <button id="chart-zoom-in" type="button">拡大</button>
+        <button id="chart-zoom-out" type="button">縮小</button>
+        <button id="chart-reset" type="button">最新へ戻る</button>
+      </div>
+
+      <div class="ohlc-grid" aria-label="最新ローソク足">
+        <div><span>始値</span><strong id="ohlc-open">-</strong></div>
+        <div><span>高値</span><strong id="ohlc-high">-</strong></div>
+        <div><span>安値</span><strong id="ohlc-low">-</strong></div>
+        <div><span>終値</span><strong id="ohlc-close">-</strong></div>
+      </div>
+
+      <div class="metric-grid" aria-label="架空企業指標">
+        <div class="metric-card"><span>時価総額</span><strong id="metric-market-cap">-</strong></div>
+        <div class="metric-card"><span>PER</span><strong id="metric-per">-</strong></div>
+        <div class="metric-card"><span>想定ボラ</span><strong id="metric-volatility">-</strong></div>
+        <div class="metric-card"><span>年間トレンド</span><strong id="metric-drift">-</strong></div>
+      </div>
+    </section>
+
+    <section class="panel trade-panel" aria-labelledby="trade-title">
+      <div class="section-heading">
+        <div>
+          <p class="kicker">PORTFOLIO</p>
+          <h2 id="trade-title">模擬売買</h2>
+        </div>
+      </div>
+
+      <div class="portfolio-summary">
+        <div><span>総資産</span><strong id="portfolio-total">¥0</strong></div>
+        <div><span>現金</span><strong id="portfolio-cash">¥0</strong></div>
+        <div><span>保有数</span><strong id="position-qty">0</strong></div>
+        <div><span>損益</span><strong id="portfolio-profit">¥0</strong></div>
+      </div>
+
+      <label class="field">
+        <span>売買数量</span>
+        <input id="trade-quantity" type="number" inputmode="numeric" min="1" max="100000000" step="1" value="100">
+      </label>
+
+      <div class="button-grid trade-buttons">
+        <button id="buy-button" class="primary-button" type="button">買う</button>
+        <button id="sell-button" type="button">売る</button>
+      </div>
+
+      <div class="toggle-list">
+        <label class="check-row">
+          <input id="allow-negative-cash" type="checkbox">
+          <span>現金マイナスを許可</span>
+        </label>
+        <label class="check-row">
+          <input id="allow-short" type="checkbox">
+          <span>空売りを許可</span>
+        </label>
+      </div>
+
+      <label class="field">
+        <span>取引コスト</span>
+        <div class="input-with-unit">
+          <input id="trade-fee" type="number" inputmode="decimal" min="0" max="10" step="0.01" value="0">
+          <span>%</span>
+        </div>
+      </label>
+
+      <p id="trade-message" class="notice" aria-live="polite">売買は架空資金だけで行われます。</p>
+
+      <details>
+        <summary>最近の取引</summary>
+        <ol id="trade-log" class="trade-log"></ol>
+      </details>
+    </section>
+
+    <section class="panel company-panel" aria-labelledby="company-title">
+      <div class="section-heading">
+        <div>
+          <p class="kicker">COMPANY LAB</p>
+          <h2 id="company-title">架空企業を作る</h2>
+        </div>
+      </div>
+
+      <label class="field">
+        <span>操作する銘柄</span>
+        <select id="company-select"></select>
+      </label>
+
+      <div class="form-grid">
+        <label class="field">
+          <span>会社名</span>
+          <input id="company-name" type="text" maxlength="40" autocomplete="off" value="">
+        </label>
+        <label class="field">
+          <span>ティッカー</span>
+          <input id="company-ticker" type="text" maxlength="10" autocomplete="off" value="">
+        </label>
+        <label class="field">
+          <span>株価</span>
+          <input id="company-price" type="number" inputmode="decimal" min="0.01" max="1000000000000" step="0.01">
+        </label>
+        <label class="field">
+          <span>時価総額 億円</span>
+          <input id="company-market-cap" type="number" inputmode="decimal" min="0" max="1000000000000" step="0.1">
+        </label>
+        <label class="field">
+          <span>PER 倍</span>
+          <input id="company-per" type="number" inputmode="decimal" min="-10000" max="10000" step="0.1">
+        </label>
+        <label class="field">
+          <span>年間ボラ %</span>
+          <input id="company-volatility" type="number" inputmode="decimal" min="0" max="500" step="0.1">
+        </label>
+        <label class="field">
+          <span>年間トレンド %</span>
+          <input id="company-drift" type="number" inputmode="decimal" min="-500" max="500" step="0.1">
+        </label>
+        <label class="field">
+          <span>材料感応度</span>
+          <input id="company-sensitivity" type="number" inputmode="decimal" min="0" max="10" step="0.1">
+        </label>
+        <label class="field wide-field">
+          <span>指標の動き方</span>
+          <select id="company-logic-mode">
+            <option value="free">自由値のまま</option>
+            <option value="linked">株価に比例して時価総額とPERも動く</option>
+          </select>
+        </label>
+      </div>
+
+      <p class="small-note">自由値では、現実の計算関係に合わない数値もそのまま遊べます。危険なコード入力と、非現実的な金融数値は別扱いです。</p>
+
+      <div class="button-grid company-actions">
+        <button id="update-company" type="button">現在の銘柄へ反映</button>
+        <button id="add-company" class="primary-button" type="button">新しい銘柄として追加</button>
+        <button id="random-company" type="button">架空銘柄をランダム生成</button>
+        <button id="delete-company" class="danger-button" type="button">選択銘柄を削除</button>
+      </div>
+      <p id="company-message" class="notice" aria-live="polite"></p>
+    </section>
+
+    <section class="panel data-panel" aria-labelledby="data-title">
+      <div class="section-heading">
+        <div>
+          <p class="kicker">LOCAL DATA</p>
+          <h2 id="data-title">保存とやり直し</h2>
+        </div>
+      </div>
+
+      <p>ゲームデータはこのブラウザー内だけに保存します。サーバー送信、アカウント、課金、広告、解析はありません。</p>
+      <p class="small-note">端末負荷と保存容量を抑えるため、自動保存は長いチャートの直近履歴を優先します。完全な状態を残したいときはJSONを書き出してください。</p>
+
+      <div class="button-grid">
+        <button id="export-data" type="button">JSONを書き出す</button>
+        <label class="file-button">
+          JSONを読み込む
+          <input id="import-data" type="file" accept="application/json,.json">
+        </label>
+        <button id="new-world" type="button">新しい世界</button>
+        <button id="reset-data" class="danger-button" type="button">端末内データを初期化</button>
+      </div>
+
+      <p id="data-message" class="notice" aria-live="polite">変更は自動保存されます。</p>
+    </section>
+
+    <section class="panel info-panel" aria-labelledby="info-title">
+      <div class="section-heading">
+        <div>
+          <p class="kicker">ABOUT</p>
+          <h2 id="info-title">このサイトについて</h2>
+        </div>
+      </div>
+      <p>表示される企業、株価、指標、ニュース効果、損益はすべて架空です。投資助言、実際の市場データ、将来予測ではありません。</p>
+      <p>会社名などの自由入力は表示文字としてのみ扱い、入力したHTMLやJavaScriptを実行しない設計です。保存データを読み込むときもサイズ、件数、文字数、数値範囲を検証します。</p>
+      <noscript><p class="notice warning">このサンドボックスの操作にはJavaScriptが必要です。</p></noscript>
+    </section>
+  </main>
+
+  <footer class="site-footer">
+    <p>Stock Trading 0. Fictional market sandbox. No real market data.</p>
+  </footer>
+</body>
+</html>

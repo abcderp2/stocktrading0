@@ -1,0 +1,4 @@
+User-agent: *
+Allow: /
+
+Sitemap: https://abcderp2.github.io/stocktrading0/sitemap.xml
