@@ -29,11 +29,16 @@ jobs:
           REF: ${{ github.ref }}
           EXPECTED_SHA: ${{ github.sha }}
           SERVER_URL: ${{ github.server_url }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           umask 077
           git init .
           git remote add origin "${SERVER_URL}/${REPOSITORY}.git"
+          auth="$(printf 'x-access-token:%s' "${GH_TOKEN}" | base64 -w0)"
+          git config --local http.https://github.com/.extraheader "AUTHORIZATION: basic ${auth}"
           git fetch --no-tags --prune origin "${REF}" '+refs/heads/*:refs/remotes/origin/*'
+          git config --local --unset-all http.https://github.com/.extraheader
+          unset auth GH_TOKEN
           git checkout --detach "${EXPECTED_SHA}"
           test "$(git rev-parse HEAD)" = "${EXPECTED_SHA}"
 
