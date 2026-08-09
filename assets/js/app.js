@@ -11,10 +11,12 @@
     saveStatus: $('save-status'), dayLabel: $('day-label'), step1: $('step-1'), step5: $('step-5'), step20: $('step-20'),
     togglePlay: $('toggle-play'), playSpeed: $('play-speed'), marketMood: $('market-mood'), moodValue: $('mood-value'),
     marketVolatility: $('market-volatility'), marketVolatilityValue: $('market-volatility-value'), customShock: $('custom-shock'),
-    applyShock: $('apply-shock'), selectedName: $('selected-name'), selectedTicker: $('selected-ticker'), currentPrice: $('current-price'),
-    priceChange: $('price-change'), ohlcOpen: $('ohlc-open'), ohlcHigh: $('ohlc-high'), ohlcLow: $('ohlc-low'), ohlcClose: $('ohlc-close'),
-    metricMarketCap: $('metric-market-cap'), metricPer: $('metric-per'), metricVolatility: $('metric-volatility'), metricDrift: $('metric-drift'),
-    portfolioTotal: $('portfolio-total'), portfolioCash: $('portfolio-cash'), positionQty: $('position-qty'), portfolioProfit: $('portfolio-profit'),
+    applyShock: $('apply-shock'), chartOlder: $('chart-older'), chartNewer: $('chart-newer'), chartZoomIn: $('chart-zoom-in'),
+    chartZoomOut: $('chart-zoom-out'), chartReset: $('chart-reset'), selectedName: $('selected-name'), selectedTicker: $('selected-ticker'),
+    currentPrice: $('current-price'), priceChange: $('price-change'), ohlcOpen: $('ohlc-open'), ohlcHigh: $('ohlc-high'),
+    ohlcLow: $('ohlc-low'), ohlcClose: $('ohlc-close'), metricMarketCap: $('metric-market-cap'), metricPer: $('metric-per'),
+    metricVolatility: $('metric-volatility'), metricDrift: $('metric-drift'), portfolioTotal: $('portfolio-total'),
+    portfolioCash: $('portfolio-cash'), positionQty: $('position-qty'), portfolioProfit: $('portfolio-profit'),
     tradeQuantity: $('trade-quantity'), buyButton: $('buy-button'), sellButton: $('sell-button'), allowNegativeCash: $('allow-negative-cash'),
     allowShort: $('allow-short'), tradeFee: $('trade-fee'), tradeMessage: $('trade-message'), tradeLog: $('trade-log'),
     companySelect: $('company-select'), companyName: $('company-name'), companyTicker: $('company-ticker'), companyPrice: $('company-price'),
@@ -62,14 +64,19 @@
     element.classList.toggle('warning', Boolean(isWarning));
   }
 
+  function persistNow() {
+    clearTimeout(saveTimer);
+    saveTimer = null;
+    if (!state) return;
+    const result = storage.saveState(state);
+    elements.saveStatus.textContent = result.ok ? '端末内に保存済み' : '保存できません';
+    if (!result.ok) announce(elements.dataMessage, result.message || '保存できませんでした。', true);
+  }
+
   function scheduleSave() {
     clearTimeout(saveTimer);
-    elements.saveStatus.textContent = '保存中';
-    saveTimer = setTimeout(() => {
-      const result = storage.saveState(state);
-      elements.saveStatus.textContent = result.ok ? '端末内に保存済み' : '保存できません';
-      if (!result.ok) announce(elements.dataMessage, result.message || '保存できませんでした。', true);
-    }, 180);
+    elements.saveStatus.textContent = '保存待ち';
+    saveTimer = setTimeout(persistNow, 1000);
   }
 
   function renderCompanySelect() {
@@ -202,8 +209,14 @@
   elements.step1.addEventListener('click', () => advance(1));
   elements.step5.addEventListener('click', () => advance(5));
   elements.step20.addEventListener('click', () => advance(20));
-  elements.togglePlay.addEventListener('click', () => setPlaying(!playTimer));
+  elements.togglePlay.addEventListener('click', () => { const next = !playTimer; setPlaying(next); if (!next) persistNow(); });
   elements.playSpeed.addEventListener('change', () => { if (playTimer) setPlaying(true); });
+  elements.chartOlder.addEventListener('click', () => chart.panBy(20));
+  elements.chartNewer.addEventListener('click', () => chart.panBy(-20));
+  elements.chartZoomIn.addEventListener('click', () => chart.zoomBy(0.8));
+  elements.chartZoomOut.addEventListener('click', () => chart.zoomBy(1.25));
+  elements.chartReset.addEventListener('click', () => chart.resetView());
+
   elements.marketMood.addEventListener('input', () => {
     state.marketMood = engine.clamp(Number(elements.marketMood.value) || 0, -100, 100);
     elements.moodValue.textContent = String(Math.round(state.marketMood)); scheduleSave();
@@ -235,7 +248,7 @@
   elements.tradeFee.addEventListener('change', () => {
     state.tradeFeePercent = engine.clamp(Number(elements.tradeFee.value) || 0, 0, 10); elements.tradeFee.value = String(state.tradeFeePercent); scheduleSave();
   });
-  elements.companySelect.addEventListener('change', () => { state.selectedCompanyId = elements.companySelect.value; renderAll(); scheduleSave(); });
+  elements.companySelect.addEventListener('change', () => { state.selectedCompanyId = elements.companySelect.value; chart.resetView(); renderAll(); scheduleSave(); });
 
   elements.updateCompany.addEventListener('click', () => {
     const company = currentCompany(); const result = engine.updateCompany(state, company.id, companyFormValue());
@@ -246,6 +259,7 @@
   elements.addCompany.addEventListener('click', () => {
     const result = engine.addCompany(state, companyFormValue());
     if (!result.ok) { announce(elements.companyMessage, result.message, true); return; }
+    chart.resetView();
     announce(elements.companyMessage, result.company.name + 'を市場へ追加しました。', false); renderAll(); scheduleSave();
   });
 
@@ -255,6 +269,7 @@
     if (!window.confirm(company.name + 'をこの架空市場から削除しますか。')) return;
     const result = engine.removeCompany(state, company.id);
     if (!result.ok) { announce(elements.companyMessage, result.message, true); return; }
+    chart.resetView();
     announce(elements.companyMessage, '銘柄を削除しました。', false); renderAll(); scheduleSave();
   });
 
@@ -266,7 +281,7 @@
   elements.importData.addEventListener('change', async () => {
     const file = elements.importData.files && elements.importData.files[0]; if (!file) return;
     try {
-      const imported = await storage.importFile(file); setPlaying(false); state = imported; renderAll(); scheduleSave();
+      const imported = await storage.importFile(file); setPlaying(false); state = imported; chart.resetView(); renderAll(); scheduleSave();
       announce(elements.dataMessage, '検証済みJSONを読み込みました。', false);
     } catch (error) {
       announce(elements.dataMessage, error instanceof Error ? error.message : 'JSONを読み込めませんでした。', true);
@@ -284,10 +299,15 @@
   });
 
   document.addEventListener('visibilitychange', () => {
-    if (document.hidden && playTimer) {
-      setPlaying(false); announce(elements.tradeMessage, '省電力のため、画面が非表示になったので自動再生を停止しました。', false);
+    if (document.hidden) {
+      if (playTimer) {
+        setPlaying(false);
+        announce(elements.tradeMessage, '省電力のため、画面が非表示になったので自動再生を停止しました。', false);
+      }
+      persistNow();
     }
   });
+  window.addEventListener('pagehide', persistNow);
 
   const loaded = storage.loadState();
   if (loaded.ok) state = loaded.state;
