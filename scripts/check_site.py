@@ -8,6 +8,7 @@ import sys
 from urllib.parse import urlparse
 ROOT = Path(__file__).resolve().parents[1]
 INDEX = ROOT / "index.html"
+LLMS = ROOT / "llms.txt"
 REQUIRED = ["index.html", "404.html", "assets/css/style.css", "assets/js/market-engine.js", "assets/js/chart.js", "assets/js/storage.js", "assets/js/app.js", "README.md", "MAINTENANCE.md", "SECURITY.md", "CHANGELOG.md", "robots.txt", "llms.txt", "sitemap.xml", ".nojekyll", ".github/CODEOWNERS", "scripts/smoke_test.js", "scripts/check_site.py", "scripts/security_audit.py", "scripts/workflow_policy.py"]
 class SiteParser(HTMLParser):
     def __init__(self) -> None:
@@ -43,6 +44,12 @@ def main():
     required_ids={"market-chart","price-drag-handle","price-slider","market-cap-slider","per-slider","volatility-slider","drift-slider","mood-slider","step-1","buy-button","sell-button","undo-action","reset-data","export-data","import-data"}; missing=sorted(required_ids-parser.ids)
     if missing: error(f"required intuitive controls are missing: {missing}"); failures+=1
     if 'rel="canonical" href="https://abcderp2.github.io/stocktrading0/"' not in html: error("canonical public URL is missing or unexpected"); failures+=1
+    if 'href="https://github.com/abcderp2/stocktrading0"' not in html: error("public GitHub repository link is missing"); failures+=1
+    if 'href="llms.txt"' not in html: error("AI public policy link is missing"); failures+=1
+    if LLMS.is_file():
+        llms=LLMS.read_text(encoding="utf-8")
+        for marker in ["English", "日本語", "Welcome", "歓迎する利用", "Financial boundary", "金融情報としての境界"]:
+            if marker not in llms: error(f"llms.txt is missing bilingual policy marker: {marker}"); failures+=1
     csp=""
     for meta in parser.meta:
         if meta.get("http-equiv","").lower()=="content-security-policy": csp=meta.get("content",""); break
