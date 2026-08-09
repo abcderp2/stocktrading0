@@ -102,37 +102,37 @@
               <small>0.01円から1兆円まで。スライダーは対数目盛です。</small>
             </div>
             <input id="price-slider" type="range" min="0" max="1400" step="1" value="500" aria-label="株価スライダー">
-            <div class="number-with-unit"><input id="price-number" type="number" inputmode="decimal" min="0.01" max="1000000000000" step="0.01"><span>円</span></div>
+            <div class="number-with-unit"><input id="price-number" type="number" inputmode="decimal" min="0.01" max="1000000000000" step="0.01" aria-label="株価 直接入力 円"><span>円</span></div>
           </div>
 
           <div class="control-row">
             <div class="control-label"><strong>時価総額</strong><small>現実の関係を無視して自由に設定できます。</small></div>
             <input id="market-cap-slider" type="range" min="0" max="1201" step="1" value="401" aria-label="時価総額スライダー">
-            <div class="number-with-unit"><input id="market-cap-number" type="number" inputmode="decimal" min="0" max="1000000000000" step="0.1"><span>億円</span></div>
+            <div class="number-with-unit"><input id="market-cap-number" type="number" inputmode="decimal" min="0" max="1000000000000" step="0.1" aria-label="時価総額 直接入力 億円"><span>億円</span></div>
           </div>
 
           <div class="control-row">
             <div class="control-label"><strong>PER</strong><small>マイナスや大きな数値も直接入力できます。</small></div>
             <input id="per-slider" type="range" min="-100" max="300" step="1" value="15" aria-label="PERスライダー">
-            <div class="number-with-unit"><input id="per-number" type="number" inputmode="decimal" min="-10000" max="10000" step="0.1"><span>倍</span></div>
+            <div class="number-with-unit"><input id="per-number" type="number" inputmode="decimal" min="-10000" max="10000" step="0.1" aria-label="PER 直接入力 倍"><span>倍</span></div>
           </div>
 
           <div class="control-row">
             <div class="control-label"><strong>値動きの激しさ</strong><small>高いほど1日ごとの揺れが大きくなります。</small></div>
             <input id="volatility-slider" type="range" min="0" max="200" step="1" value="30" aria-label="値動きの激しさ">
-            <div class="number-with-unit"><input id="volatility-number" type="number" inputmode="decimal" min="0" max="500" step="0.1"><span>%</span></div>
+            <div class="number-with-unit"><input id="volatility-number" type="number" inputmode="decimal" min="0" max="500" step="0.1" aria-label="値動きの激しさ 直接入力 パーセント"><span>%</span></div>
           </div>
 
           <div class="control-row">
             <div class="control-label"><strong>上がりやすさ</strong><small>プラスで上向き、マイナスで下向きの傾向です。</small></div>
             <input id="drift-slider" type="range" min="-100" max="100" step="1" value="5" aria-label="上がりやすさ">
-            <div class="number-with-unit"><input id="drift-number" type="number" inputmode="decimal" min="-500" max="500" step="0.1"><span>%</span></div>
+            <div class="number-with-unit"><input id="drift-number" type="number" inputmode="decimal" min="-500" max="500" step="0.1" aria-label="上がりやすさ 直接入力 パーセント"><span>%</span></div>
           </div>
 
           <div class="control-row">
             <div class="control-label"><strong>市場ムード</strong><small>悲観から熱狂まで、次の日の動きへ少し影響します。</small></div>
             <input id="mood-slider" type="range" min="-100" max="100" step="1" value="0" aria-label="市場ムード">
-            <div class="number-with-unit"><input id="mood-number" type="number" inputmode="numeric" min="-100" max="100" step="1"><span></span></div>
+            <div class="number-with-unit"><input id="mood-number" type="number" inputmode="numeric" min="-100" max="100" step="1" aria-label="市場ムード 直接入力"><span></span></div>
           </div>
         </div>
       </section>
@@ -222,6 +222,7 @@
 
   <footer class="site-footer">
     <p>株価あそび場 / Stock Playground. No real market data.</p>
+    <p><a href="llms.txt">AI向け公開方針</a></p>
   </footer>
 </body>
 </html>
