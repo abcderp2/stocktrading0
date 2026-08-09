@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Keep GitHub Actions deliberately small and least-privileged."""
+"""Keep GitHub Actions deliberately small, least-privileged, and credential-free."""
 from pathlib import Path
 import sys
 
@@ -16,6 +16,11 @@ def main() -> int:
             ("uses:", "external or reusable Actions are not allowed"),
             ("pull_request_target", "pull_request_target is not allowed"),
             ("${{ secrets.", "workflow must not require repository secrets"),
+            ("${{ github.token", "workflow must not reference github.token"),
+            ("GH_TOKEN", "workflow must not expose a GitHub token through GH_TOKEN"),
+            ("AUTHORIZATION: basic", "workflow must not construct Basic authorization headers"),
+            (".extraheader", "workflow must not add Git authentication headers"),
+            ("persist-credentials", "workflow must not persist checkout credentials"),
             ("contents: write", "workflow must not request contents: write"),
             ("permissions: write-all", "workflow must not request write-all"),
         ]
