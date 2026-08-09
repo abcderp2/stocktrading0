@@ -24,6 +24,14 @@ DANGEROUS_JS = {
     "document.write": re.compile(r"\bdocument\.write(?:ln)?\s*\("),
     "eval": re.compile(r"(^|[^A-Za-z0-9_$])eval\s*\("),
     "Function constructor": re.compile(r"\bnew\s+Function\s*\("),
+    "srcdoc": re.compile(r"\.srcdoc\b"),
+}
+NETWORK_JS = {
+    "fetch": re.compile(r"(^|[^A-Za-z0-9_$])fetch\s*\("),
+    "XMLHttpRequest": re.compile(r"\bXMLHttpRequest\b"),
+    "WebSocket": re.compile(r"\bWebSocket\s*\("),
+    "EventSource": re.compile(r"\bEventSource\s*\("),
+    "sendBeacon": re.compile(r"\bnavigator\.sendBeacon\s*\("),
 }
 
 
@@ -49,15 +57,20 @@ def scan_current() -> list[str]:
         for label, pattern in SECRET_PATTERNS.items():
             if pattern.search(text):
                 issues.append(f"{label} pattern found in {rel}")
-        if path.suffix == ".js":
+        if path.suffix == ".js" and not str(rel).startswith("scripts/"):
             for label, pattern in DANGEROUS_JS.items():
                 if pattern.search(text):
                     issues.append(f"dangerous DOM/code sink {label} found in {rel}")
+            for label, pattern in NETWORK_JS.items():
+                if pattern.search(text):
+                    issues.append(f"unexpected network API {label} found in {rel}")
         if path.suffix == ".html":
             if re.search(r"\son[a-z]+\s*=", text, re.IGNORECASE):
                 issues.append(f"inline event handler found in {rel}")
             if re.search(r"<script(?![^>]*\bsrc=)[^>]*>", text, re.IGNORECASE):
                 issues.append(f"inline script found in {rel}")
+            if re.search(r"(?:href|src)\s*=\s*['\"]\s*javascript:", text, re.IGNORECASE):
+                issues.append(f"javascript URL found in {rel}")
     return issues
 
 
