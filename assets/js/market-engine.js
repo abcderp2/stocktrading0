@@ -5,6 +5,9 @@
   const MAX_COMPANIES = 40;
   const MAX_CANDLES = 1200;
   const MAX_TRADES = 300;
+  const MAX_TRADE_QUANTITY = 100000000;
+  const MAX_POSITION = 1000000000;
+  const MAX_ACCOUNT_VALUE = 1e30;
   const MIN_PRICE = 0.01;
   const MAX_PRICE = 1e12;
   const SCHEMA_VERSION = 1;
@@ -16,6 +19,14 @@
   function finiteNumber(value, fallback) {
     const number = Number(value);
     return Number.isFinite(number) ? number : fallback;
+  }
+
+  function cleanDisplayText(value, fallback, maxLength) {
+    const text = String(value || fallback)
+      .replace(/[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/g, '')
+      .trim()
+      .slice(0, maxLength);
+    return text || fallback;
   }
 
   function randomUint32() {
@@ -49,17 +60,18 @@
   }
 
   function normalizeCompanyInput(input) {
-    const price = clamp(finiteNumber(input.price, 1000), MIN_PRICE, MAX_PRICE);
+    const source = input && typeof input === 'object' ? input : {};
+    const price = clamp(finiteNumber(source.price, 1000), MIN_PRICE, MAX_PRICE);
     return {
-      name: String(input.name || '無名株式会社').trim().slice(0, 40) || '無名株式会社',
-      ticker: String(input.ticker || 'NONE').trim().toUpperCase().replace(/[^A-Z0-9._-]/g, '').slice(0, 10) || 'NONE',
+      name: cleanDisplayText(source.name, '無名株式会社', 40),
+      ticker: String(source.ticker || 'NONE').trim().toUpperCase().replace(/[^A-Z0-9._-]/g, '').slice(0, 10) || 'NONE',
       price,
-      marketCap: clamp(finiteNumber(input.marketCap, 1000), 0, 1e12),
-      per: clamp(finiteNumber(input.per, 15), -10000, 10000),
-      volatility: clamp(finiteNumber(input.volatility, 30), 0, 500),
-      drift: clamp(finiteNumber(input.drift, 5), -500, 500),
-      sensitivity: clamp(finiteNumber(input.sensitivity, 1), 0, 10),
-      logicMode: input.logicMode === 'linked' ? 'linked' : 'free'
+      marketCap: clamp(finiteNumber(source.marketCap, 1000), 0, 1e12),
+      per: clamp(finiteNumber(source.per, 15), -10000, 10000),
+      volatility: clamp(finiteNumber(source.volatility, 30), 0, 500),
+      drift: clamp(finiteNumber(source.drift, 5), -500, 500),
+      sensitivity: clamp(finiteNumber(source.sensitivity, 1), 0, 10),
+      logicMode: source.logicMode === 'linked' ? 'linked' : 'free'
     };
   }
 
@@ -269,50 +281,66 @@
   function executeTrade(state, companyId, side, quantity) {
     const company = state.companies.find((item) => item.id === companyId);
     if (!company) return { ok: false, message: '銘柄が見つかりません。' };
-    const qty = Math.floor(clamp(finiteNumber(quantity, 0), 0, 100000000));
+    const qty = Math.floor(clamp(finiteNumber(quantity, 0), 0, MAX_TRADE_QUANTITY));
     if (qty <= 0) return { ok: false, message: '数量は1以上にしてください。' };
     if (side !== 'buy' && side !== 'sell') return { ok: false, message: '売買方向が不正です。' };
 
-    const price = company.price;
+    const price = clamp(finiteNumber(company.price, MIN_PRICE), MIN_PRICE, MAX_PRICE);
     const feeRate = clamp(finiteNumber(state.tradeFeePercent, 0), 0, 10) / 100;
     const gross = price * qty;
     const fee = gross * feeRate;
+    if (!Number.isFinite(gross) || !Number.isFinite(fee)) {
+      return { ok: false, message: '取引金額が大きすぎます。' };
+    }
+
     const position = ensurePosition(state, companyId);
+    const oldQty = clamp(finiteNumber(position.quantity, 0), -MAX_POSITION, MAX_POSITION);
+    const oldAverage = clamp(finiteNumber(position.averagePrice, 0), 0, MAX_PRICE);
+    const delta = side === 'buy' ? qty : -qty;
+    const newQty = oldQty + delta;
+    if (!Number.isFinite(newQty) || Math.abs(newQty) > MAX_POSITION) {
+      return { ok: false, message: '1銘柄の建玉上限は' + MAX_POSITION.toLocaleString('ja-JP') + '株です。' };
+    }
 
     if (side === 'buy' && !state.allowNegativeCash && state.cash < gross + fee) {
       return { ok: false, message: '現金が不足しています。「現金マイナスを許可」を使うこともできます。' };
     }
-    if (side === 'sell' && !state.allowShort && position.quantity < qty) {
+    if (side === 'sell' && !state.allowShort && oldQty < qty) {
       return { ok: false, message: '保有数を超えて売るには「空売りを許可」を有効にしてください。' };
     }
 
-    const delta = side === 'buy' ? qty : -qty;
-    const oldQty = position.quantity;
-    const newQty = oldQty + delta;
     let realized = 0;
-
+    let newAverage = oldAverage;
     if (oldQty === 0 || Math.sign(oldQty) === Math.sign(delta)) {
-      const oldNotional = Math.abs(oldQty) * position.averagePrice;
+      const oldNotional = Math.abs(oldQty) * oldAverage;
       const addedNotional = Math.abs(delta) * price;
-      position.averagePrice = (oldNotional + addedNotional) / Math.max(1, Math.abs(newQty));
+      newAverage = (oldNotional + addedNotional) / Math.max(1, Math.abs(newQty));
     } else {
       const closingQty = Math.min(Math.abs(oldQty), Math.abs(delta));
       if (oldQty > 0) {
-        realized = (price - position.averagePrice) * closingQty;
+        realized = (price - oldAverage) * closingQty;
       } else {
-        realized = (position.averagePrice - price) * closingQty;
+        realized = (oldAverage - price) * closingQty;
       }
-
       if (newQty === 0) {
-        position.averagePrice = 0;
+        newAverage = 0;
       } else if (Math.sign(newQty) !== Math.sign(oldQty)) {
-        position.averagePrice = price;
+        newAverage = price;
       }
     }
 
+    const cashDelta = side === 'buy' ? -(gross + fee) : (gross - fee);
+    const nextCash = finiteNumber(state.cash, 0) + cashDelta;
+    const nextRealized = finiteNumber(state.realizedProfit, 0) + realized - fee;
+    if (!Number.isFinite(nextCash) || Math.abs(nextCash) > MAX_ACCOUNT_VALUE ||
+        !Number.isFinite(nextRealized) || Math.abs(nextRealized) > MAX_ACCOUNT_VALUE) {
+      return { ok: false, message: '口座数値が安全上限を超えるため、この取引は実行できません。' };
+    }
+
     position.quantity = newQty;
-    state.cash += side === 'buy' ? -(gross + fee) : (gross - fee);
-    state.realizedProfit += realized - fee;
+    position.averagePrice = newAverage;
+    state.cash = nextCash;
+    state.realizedProfit = nextRealized;
 
     const trade = {
       id: newId(state, 'trade'),
@@ -380,6 +408,9 @@
     MAX_COMPANIES,
     MAX_CANDLES,
     MAX_TRADES,
+    MAX_TRADE_QUANTITY,
+    MAX_POSITION,
+    MAX_ACCOUNT_VALUE,
     MIN_PRICE,
     MAX_PRICE,
     clamp,
