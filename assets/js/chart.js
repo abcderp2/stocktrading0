@@ -47,10 +47,7 @@
       this.canvas.addEventListener('wheel', (event) => {
         event.preventDefault();
         const direction = Math.sign(event.deltaY);
-        const factor = direction > 0 ? 1.15 : 0.87;
-        this.visibleCount = clamp(Math.round(this.visibleCount * factor), 20, 260);
-        this.offsetFromEnd = clamp(this.offsetFromEnd, 0, Math.max(0, this.data.length - this.visibleCount));
-        this.requestDraw();
+        this.zoomBy(direction > 0 ? 1.15 : 0.87);
       }, { passive: false });
 
       this.canvas.addEventListener('pointerdown', (event) => {
@@ -122,6 +119,23 @@
     setData(candles, trades) {
       this.data = Array.isArray(candles) ? candles : [];
       this.trades = Array.isArray(trades) ? trades : [];
+      this.offsetFromEnd = clamp(this.offsetFromEnd, 0, Math.max(0, this.data.length - this.visibleCount));
+      this.requestDraw();
+    }
+
+    panBy(candles) {
+      const amount = Math.round(Number(candles) || 0);
+      this.offsetFromEnd = clamp(
+        this.offsetFromEnd + amount,
+        0,
+        Math.max(0, this.data.length - this.visibleCount)
+      );
+      this.requestDraw();
+    }
+
+    zoomBy(factor) {
+      const safeFactor = clamp(Number(factor) || 1, 0.5, 2);
+      this.visibleCount = clamp(Math.round(this.visibleCount * safeFactor), 20, 260);
       this.offsetFromEnd = clamp(this.offsetFromEnd, 0, Math.max(0, this.data.length - this.visibleCount));
       this.requestDraw();
     }
