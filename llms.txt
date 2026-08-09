@@ -1,15 +1,16 @@
-# Stock Trading 0
+# 株価あそび場
 
-Stock Trading 0 is a fictional stock-market sandbox hosted at:
+Public site:
 https://abcderp2.github.io/stocktrading0/
 
 Repository:
 https://github.com/abcderp2/stocktrading0
 
 Purpose:
-- Create fictional companies and fictional stock markets.
-- Edit fictional prices, market capitalization, PER, volatility, trends, and market events.
-- Play with simulated trading using fictional funds.
+- A fictional stock-price playground.
+- The initial company is named "テスト企業" and users can freely rename it.
+- Users can move fictional price, market capitalization, PER, volatility, trend, and market mood.
+- Users can simulate buying and selling with fictional funds.
 - No real stock quotes, real company data, investment advice, paid API, advertising, analytics, or account system.
 
 AI policy:

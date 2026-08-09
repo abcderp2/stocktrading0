@@ -1,319 +1,62 @@
 (function () {
   'use strict';
-
-  const root = window.StockSandbox;
-  const engine = root.Engine;
-  const storage = root.Storage;
-  if (!engine || !storage || !root.Chart) return;
-
+  const root = window.StockSandbox; const engine = root && root.Engine; const storage = root && root.Storage; if (!engine || !storage || !root.Chart) return;
   const $ = (id) => document.getElementById(id);
-  const elements = {
-    saveStatus: $('save-status'), dayLabel: $('day-label'), step1: $('step-1'), step5: $('step-5'), step20: $('step-20'),
-    togglePlay: $('toggle-play'), playSpeed: $('play-speed'), marketMood: $('market-mood'), moodValue: $('mood-value'),
-    marketVolatility: $('market-volatility'), marketVolatilityValue: $('market-volatility-value'), customShock: $('custom-shock'),
-    applyShock: $('apply-shock'), chartOlder: $('chart-older'), chartNewer: $('chart-newer'), chartZoomIn: $('chart-zoom-in'),
-    chartZoomOut: $('chart-zoom-out'), chartReset: $('chart-reset'), selectedName: $('selected-name'), selectedTicker: $('selected-ticker'),
-    currentPrice: $('current-price'), priceChange: $('price-change'), ohlcOpen: $('ohlc-open'), ohlcHigh: $('ohlc-high'),
-    ohlcLow: $('ohlc-low'), ohlcClose: $('ohlc-close'), metricMarketCap: $('metric-market-cap'), metricPer: $('metric-per'),
-    metricVolatility: $('metric-volatility'), metricDrift: $('metric-drift'), portfolioTotal: $('portfolio-total'),
-    portfolioCash: $('portfolio-cash'), positionQty: $('position-qty'), portfolioProfit: $('portfolio-profit'),
-    tradeQuantity: $('trade-quantity'), buyButton: $('buy-button'), sellButton: $('sell-button'), allowNegativeCash: $('allow-negative-cash'),
-    allowShort: $('allow-short'), tradeFee: $('trade-fee'), tradeMessage: $('trade-message'), tradeLog: $('trade-log'),
-    companySelect: $('company-select'), companyName: $('company-name'), companyTicker: $('company-ticker'), companyPrice: $('company-price'),
-    companyMarketCap: $('company-market-cap'), companyPer: $('company-per'), companyVolatility: $('company-volatility'), companyDrift: $('company-drift'),
-    companySensitivity: $('company-sensitivity'), companyLogicMode: $('company-logic-mode'), updateCompany: $('update-company'),
-    addCompany: $('add-company'), randomCompany: $('random-company'), deleteCompany: $('delete-company'), companyMessage: $('company-message'),
-    exportData: $('export-data'), importData: $('import-data'), newWorld: $('new-world'), resetData: $('reset-data'), dataMessage: $('data-message')
-  };
-
-  let state;
-  let playTimer = null;
-  let saveTimer = null;
-  const chart = new root.Chart.CandlestickChart($('market-chart'));
-
-  function formatMoney(value) {
-    if (!Number.isFinite(value)) return '-';
-    if (Math.abs(value) >= 1e15) return '¥' + value.toExponential(3);
-    return new Intl.NumberFormat('ja-JP', {
-      style: 'currency', currency: 'JPY', maximumFractionDigits: Math.abs(value) < 100 ? 2 : 0
-    }).format(value);
-  }
-
-  function formatNumber(value, digits) {
-    if (!Number.isFinite(value)) return '-';
-    if (Math.abs(value) >= 1e12) return value.toExponential(3);
-    return new Intl.NumberFormat('ja-JP', { maximumFractionDigits: digits, minimumFractionDigits: 0 }).format(value);
-  }
-
-  function setSignedClass(element, value) {
-    element.classList.remove('positive', 'negative');
-    if (value > 0) element.classList.add('positive');
-    if (value < 0) element.classList.add('negative');
-  }
-
+  const elements = { saveStatus: $('save-status'), dayLabel: $('day-label'), companyName: $('company-name'), companyTicker: $('company-ticker'), companyNameDisplay: $('company-name-display'), currentPrice: $('current-price'), priceChange: $('price-change'), marketChart: $('market-chart'), priceDragHandle: $('price-drag-handle'), priceSlider: $('price-slider'), priceNumber: $('price-number'), marketCapSlider: $('market-cap-slider'), marketCapNumber: $('market-cap-number'), perSlider: $('per-slider'), perNumber: $('per-number'), volatilitySlider: $('volatility-slider'), volatilityNumber: $('volatility-number'), driftSlider: $('drift-slider'), driftNumber: $('drift-number'), moodSlider: $('mood-slider'), moodNumber: $('mood-number'), logicMode: $('logic-mode'), sensitivityNumber: $('sensitivity-number'), quickPriceButtons: document.querySelectorAll('.quick-price'), step1: $('step-1'), step5: $('step-5'), step20: $('step-20'), togglePlay: $('toggle-play'), playSpeed: $('play-speed'), chartOlder: $('chart-older'), chartNewer: $('chart-newer'), chartZoomIn: $('chart-zoom-in'), chartZoomOut: $('chart-zoom-out'), chartReset: $('chart-reset'), portfolioTotal: $('portfolio-total'), portfolioCash: $('portfolio-cash'), positionQty: $('position-qty'), portfolioProfit: $('portfolio-profit'), averagePrice: $('average-price'), tradeQuantity: $('trade-quantity'), quantityButtons: document.querySelectorAll('.quantity-preset'), buyButton: $('buy-button'), sellButton: $('sell-button'), allowNegativeCash: $('allow-negative-cash'), allowShort: $('allow-short'), tradeFee: $('trade-fee'), tradeMessage: $('trade-message'), tradeLog: $('trade-log'), undoAction: $('undo-action'), resetData: $('reset-data'), exportData: $('export-data'), importData: $('import-data'), dataMessage: $('data-message') };
+  let state; let playTimer = null; let saveTimer = null; let lastUndoGroup = ''; let lastUndoAt = 0; const undoStack = []; const chart = new root.Chart.CandlestickChart(elements.marketChart);
+  function snapshot() { return JSON.parse(JSON.stringify(state)); }
+  function pushUndo(value) { if (!value) return; undoStack.push(value); if (undoStack.length > 20) undoStack.shift(); elements.undoAction.disabled = undoStack.length === 0; }
+  function rememberDiscrete() { pushUndo(snapshot()); lastUndoGroup = ''; lastUndoAt = 0; }
+  function rememberContinuous(group) { const now = Date.now(); if (group !== lastUndoGroup || now - lastUndoAt > 650) { pushUndo(snapshot()); lastUndoGroup = group; lastUndoAt = now; } }
+  function formatMoney(value) { if (!Number.isFinite(value)) return '-'; if (Math.abs(value) >= 1e15) return '¥' + value.toExponential(3); return new Intl.NumberFormat('ja-JP', { style: 'currency', currency: 'JPY', maximumFractionDigits: Math.abs(value) < 100 ? 2 : 0 }).format(value); }
+  function formatNumber(value, digits) { if (!Number.isFinite(value)) return '-'; if (Math.abs(value) >= 1e12) return value.toExponential(3); return new Intl.NumberFormat('ja-JP', { maximumFractionDigits: digits, minimumFractionDigits: 0 }).format(value); }
+  function setSignedClass(element, value) { element.classList.remove('positive', 'negative'); if (value > 0) element.classList.add('positive'); if (value < 0) element.classList.add('negative'); }
+  function announce(element, message, warning) { if (!element) return; element.textContent = message; element.classList.toggle('warning', Boolean(warning)); }
   function currentCompany() { return engine.currentCompany(state); }
-
-  function currentPosition() {
-    const company = currentCompany();
-    if (!company) return { quantity: 0, averagePrice: 0 };
-    return state.positions[company.id] || { quantity: 0, averagePrice: 0 };
-  }
-
-  function announce(element, message, isWarning) {
-    element.textContent = message;
-    element.classList.toggle('warning', Boolean(isWarning));
-  }
-
-  function persistNow() {
-    clearTimeout(saveTimer);
-    saveTimer = null;
-    if (!state) return;
-    const result = storage.saveState(state);
-    elements.saveStatus.textContent = result.ok ? '端末内に保存済み' : '保存できません';
-    if (!result.ok) announce(elements.dataMessage, result.message || '保存できませんでした。', true);
-  }
-
-  function scheduleSave() {
-    clearTimeout(saveTimer);
-    elements.saveStatus.textContent = '保存待ち';
-    saveTimer = setTimeout(persistNow, 1000);
-  }
-
-  function renderCompanySelect() {
-    const fragment = document.createDocumentFragment();
-    for (const company of state.companies) {
-      fragment.appendChild(new Option(company.name + ' (' + company.ticker + ')', company.id));
-    }
-    elements.companySelect.replaceChildren(fragment);
-    elements.companySelect.value = state.selectedCompanyId;
-  }
-
-  function renderCompanyEditor() {
-    const company = currentCompany();
-    if (!company) return;
-    elements.companyName.value = company.name;
-    elements.companyTicker.value = company.ticker;
-    elements.companyPrice.value = String(company.price);
-    elements.companyMarketCap.value = String(company.marketCap);
-    elements.companyPer.value = String(company.per);
-    elements.companyVolatility.value = String(company.volatility);
-    elements.companyDrift.value = String(company.drift);
-    elements.companySensitivity.value = String(company.sensitivity);
-    elements.companyLogicMode.value = company.logicMode;
-  }
-
-  function renderTradeLog() {
-    const fragment = document.createDocumentFragment();
-    const recent = state.trades.slice(0, 20);
-    for (const trade of recent) {
-      const item = document.createElement('li');
-      const side = trade.side === 'buy' ? '買い' : '売り';
-      item.textContent = 'D' + trade.day + ' ' + trade.companyName + ' ' + side + ' ' + formatNumber(trade.quantity, 0) + '株 @ ' + formatMoney(trade.price);
-      fragment.appendChild(item);
-    }
-    if (!recent.length) {
-      const item = document.createElement('li');
-      item.textContent = 'まだ取引はありません。';
-      fragment.appendChild(item);
-    }
-    elements.tradeLog.replaceChildren(fragment);
-  }
-
-  function renderChartAndMetrics() {
-    const company = currentCompany();
-    if (!company) return;
-    const last = company.candles[company.candles.length - 1];
-    const companyTrades = state.trades.filter((trade) => trade.companyId === company.id);
-    elements.selectedName.textContent = company.name;
-    elements.selectedTicker.textContent = company.ticker;
-    elements.currentPrice.textContent = formatMoney(company.price);
-    elements.priceChange.textContent = (company.lastChange >= 0 ? '+' : '') + formatNumber(company.lastChange, 2) + '%';
-    setSignedClass(elements.priceChange, company.lastChange);
-    if (last) {
-      elements.ohlcOpen.textContent = formatMoney(last.open); elements.ohlcHigh.textContent = formatMoney(last.high);
-      elements.ohlcLow.textContent = formatMoney(last.low); elements.ohlcClose.textContent = formatMoney(last.close);
-    }
-    elements.metricMarketCap.textContent = formatNumber(company.marketCap, 1) + ' 億円';
-    elements.metricPer.textContent = formatNumber(company.per, 1) + ' 倍';
-    elements.metricVolatility.textContent = formatNumber(company.volatility, 1) + '%';
-    elements.metricDrift.textContent = (company.drift >= 0 ? '+' : '') + formatNumber(company.drift, 1) + '%';
-    chart.setData(company.candles, companyTrades);
-  }
-
-  function renderPortfolio() {
-    const portfolio = engine.portfolioValue(state);
-    const position = currentPosition();
-    elements.portfolioTotal.textContent = formatMoney(portfolio.total);
-    elements.portfolioCash.textContent = formatMoney(portfolio.cash);
-    elements.positionQty.textContent = formatNumber(position.quantity, 0);
-    elements.portfolioProfit.textContent = formatMoney(portfolio.profit);
-    setSignedClass(elements.portfolioProfit, portfolio.profit);
-  }
-
-  function renderSettings() {
-    elements.dayLabel.textContent = 'Day ' + state.day;
-    elements.marketMood.value = String(state.marketMood); elements.moodValue.textContent = String(Math.round(state.marketMood));
-    elements.marketVolatility.value = String(state.marketVolatility); elements.marketVolatilityValue.textContent = String(Math.round(state.marketVolatility));
-    elements.allowNegativeCash.checked = state.allowNegativeCash; elements.allowShort.checked = state.allowShort;
-    elements.tradeFee.value = String(state.tradeFeePercent); elements.deleteCompany.disabled = state.companies.length <= 1;
-  }
-
-  function renderAll(options) {
-    const settings = options || {};
-    renderCompanySelect();
-    if (settings.editor !== false) renderCompanyEditor();
-    renderChartAndMetrics(); renderPortfolio(); renderSettings(); renderTradeLog();
-  }
-
-  function companyFormValue() {
-    return {
-      name: elements.companyName.value, ticker: elements.companyTicker.value, price: Number(elements.companyPrice.value),
-      marketCap: Number(elements.companyMarketCap.value), per: Number(elements.companyPer.value),
-      volatility: Number(elements.companyVolatility.value), drift: Number(elements.companyDrift.value),
-      sensitivity: Number(elements.companySensitivity.value), logicMode: elements.companyLogicMode.value
-    };
-  }
-
-  function advance(days) { engine.stepMarket(state, days); renderAll({ editor: false }); scheduleSave(); }
-
-  function setPlaying(enabled) {
-    clearInterval(playTimer); playTimer = null;
-    elements.togglePlay.setAttribute('aria-pressed', enabled ? 'true' : 'false');
-    elements.togglePlay.textContent = enabled ? '停止' : '自動再生';
-    if (!enabled) return;
-    playTimer = setInterval(() => advance(1), Number(elements.playSpeed.value) || 650);
-  }
-
-  function applyTrade(side) {
-    state.allowNegativeCash = elements.allowNegativeCash.checked; state.allowShort = elements.allowShort.checked;
-    state.tradeFeePercent = engine.clamp(Number(elements.tradeFee.value) || 0, 0, 10);
-    const company = currentCompany();
-    const result = engine.executeTrade(state, company.id, side, elements.tradeQuantity.value);
-    if (!result.ok) { announce(elements.tradeMessage, result.message, true); return; }
-    const label = side === 'buy' ? '買い' : '売り';
-    announce(elements.tradeMessage, label + 'を架空約定しました。' + formatNumber(result.trade.quantity, 0) + '株 @ ' + formatMoney(result.trade.price), false);
-    renderAll({ editor: false }); scheduleSave();
-  }
-
-  function applyRandomDraft() {
-    const draft = engine.randomCompanyDraft(state);
-    elements.companyName.value = draft.name; elements.companyTicker.value = draft.ticker; elements.companyPrice.value = String(draft.price);
-    elements.companyMarketCap.value = String(draft.marketCap); elements.companyPer.value = String(draft.per);
-    elements.companyVolatility.value = String(draft.volatility); elements.companyDrift.value = String(draft.drift);
-    elements.companySensitivity.value = String(draft.sensitivity); elements.companyLogicMode.value = draft.logicMode;
-    announce(elements.companyMessage, '入力欄へ架空企業案を作りました。まだ市場には追加していません。', false);
-  }
-
-  function createFreshState() { setPlaying(false); state = engine.createDefaultState(); renderAll(); scheduleSave(); }
-
-  elements.step1.addEventListener('click', () => advance(1));
-  elements.step5.addEventListener('click', () => advance(5));
-  elements.step20.addEventListener('click', () => advance(20));
-  elements.togglePlay.addEventListener('click', () => { const next = !playTimer; setPlaying(next); if (!next) persistNow(); });
-  elements.playSpeed.addEventListener('change', () => { if (playTimer) setPlaying(true); });
-  elements.chartOlder.addEventListener('click', () => chart.panBy(20));
-  elements.chartNewer.addEventListener('click', () => chart.panBy(-20));
-  elements.chartZoomIn.addEventListener('click', () => chart.zoomBy(0.8));
-  elements.chartZoomOut.addEventListener('click', () => chart.zoomBy(1.25));
-  elements.chartReset.addEventListener('click', () => chart.resetView());
-
-  elements.marketMood.addEventListener('input', () => {
-    state.marketMood = engine.clamp(Number(elements.marketMood.value) || 0, -100, 100);
-    elements.moodValue.textContent = String(Math.round(state.marketMood)); scheduleSave();
-  });
-  elements.marketVolatility.addEventListener('input', () => {
-    state.marketVolatility = engine.clamp(Number(elements.marketVolatility.value) || 100, 10, 300);
-    elements.marketVolatilityValue.textContent = String(Math.round(state.marketVolatility)); scheduleSave();
-  });
-
-  document.querySelectorAll('.event-button').forEach((button) => {
-    button.addEventListener('click', () => {
-      const company = currentCompany(); const shock = Number(button.dataset.shock) || 0;
-      engine.injectShock(state, company.id, shock);
-      announce(elements.tradeMessage, company.name + 'へ' + (shock >= 0 ? '+' : '') + shock + '%の材料を予約しました。次の日に反映します。', false);
-      scheduleSave();
-    });
-  });
-
-  elements.applyShock.addEventListener('click', () => {
-    const company = currentCompany(); const shock = engine.clamp(Number(elements.customShock.value) || 0, -95, 1000);
-    engine.injectShock(state, company.id, shock);
-    announce(elements.tradeMessage, company.name + 'へ' + (shock >= 0 ? '+' : '') + formatNumber(shock, 1) + '%の材料を予約しました。', false); scheduleSave();
-  });
-
-  elements.buyButton.addEventListener('click', () => applyTrade('buy'));
-  elements.sellButton.addEventListener('click', () => applyTrade('sell'));
-  elements.allowNegativeCash.addEventListener('change', () => { state.allowNegativeCash = elements.allowNegativeCash.checked; scheduleSave(); });
-  elements.allowShort.addEventListener('change', () => { state.allowShort = elements.allowShort.checked; scheduleSave(); });
-  elements.tradeFee.addEventListener('change', () => {
-    state.tradeFeePercent = engine.clamp(Number(elements.tradeFee.value) || 0, 0, 10); elements.tradeFee.value = String(state.tradeFeePercent); scheduleSave();
-  });
-  elements.companySelect.addEventListener('change', () => { state.selectedCompanyId = elements.companySelect.value; chart.resetView(); renderAll(); scheduleSave(); });
-
-  elements.updateCompany.addEventListener('click', () => {
-    const company = currentCompany(); const result = engine.updateCompany(state, company.id, companyFormValue());
-    if (!result.ok) { announce(elements.companyMessage, result.message, true); return; }
-    announce(elements.companyMessage, '現在の架空銘柄へ反映しました。', false); renderAll(); scheduleSave();
-  });
-
-  elements.addCompany.addEventListener('click', () => {
-    const result = engine.addCompany(state, companyFormValue());
-    if (!result.ok) { announce(elements.companyMessage, result.message, true); return; }
-    chart.resetView();
-    announce(elements.companyMessage, result.company.name + 'を市場へ追加しました。', false); renderAll(); scheduleSave();
-  });
-
-  elements.randomCompany.addEventListener('click', applyRandomDraft);
-  elements.deleteCompany.addEventListener('click', () => {
-    const company = currentCompany(); if (!company) return;
-    if (!window.confirm(company.name + 'をこの架空市場から削除しますか。')) return;
-    const result = engine.removeCompany(state, company.id);
-    if (!result.ok) { announce(elements.companyMessage, result.message, true); return; }
-    chart.resetView();
-    announce(elements.companyMessage, '銘柄を削除しました。', false); renderAll(); scheduleSave();
-  });
-
-  elements.exportData.addEventListener('click', () => {
-    try { storage.exportState(state); announce(elements.dataMessage, 'JSONを書き出しました。端末側のダウンロード先を確認してください。', false); }
-    catch (error) { announce(elements.dataMessage, error instanceof Error ? error.message : '書き出せませんでした。', true); }
-  });
-
-  elements.importData.addEventListener('change', async () => {
-    const file = elements.importData.files && elements.importData.files[0]; if (!file) return;
-    try {
-      const imported = await storage.importFile(file); setPlaying(false); state = imported; chart.resetView(); renderAll(); scheduleSave();
-      announce(elements.dataMessage, '検証済みJSONを読み込みました。', false);
-    } catch (error) {
-      announce(elements.dataMessage, error instanceof Error ? error.message : 'JSONを読み込めませんでした。', true);
-    } finally { elements.importData.value = ''; }
-  });
-
-  elements.newWorld.addEventListener('click', () => {
-    if (!window.confirm('現在の世界を置き換えます。先にJSONを書き出すと後から戻せます。続けますか。')) return;
-    createFreshState(); announce(elements.dataMessage, '新しい乱数シードで世界を作りました。', false);
-  });
-
-  elements.resetData.addEventListener('click', () => {
-    if (!window.confirm('このブラウザー内の保存データを削除して初期状態へ戻しますか。')) return;
-    storage.clearState(); createFreshState(); announce(elements.dataMessage, '端末内データを初期化しました。', false);
-  });
-
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden) {
-      if (playTimer) {
-        setPlaying(false);
-        announce(elements.tradeMessage, '省電力のため、画面が非表示になったので自動再生を停止しました。', false);
-      }
-      persistNow();
-    }
-  });
-  window.addEventListener('pagehide', persistNow);
-
-  const loaded = storage.loadState();
-  if (loaded.ok) state = loaded.state;
-  else {
-    state = engine.createDefaultState();
-    if (loaded.message) announce(elements.dataMessage, loaded.message + ' 初期状態を作りました。', true);
-  }
-  renderAll(); scheduleSave();
+  function currentPosition() { return state.positions && state.positions[engine.COMPANY_ID] ? state.positions[engine.COMPANY_ID] : { quantity: 0, averagePrice: 0 }; }
+  function priceToSlider(price) { return Math.round(engine.clamp((Math.log10(engine.clamp(price, 0.01, 1e12)) + 2) * 100, 0, 1400)); }
+  function sliderToPrice(value) { return engine.clamp(Math.pow(10, Number(value) / 100 - 2), engine.MIN_PRICE, engine.MAX_PRICE); }
+  function marketCapToSlider(value) { if (!(value > 0)) return 0; return Math.round(engine.clamp(1 + Math.log10(Math.max(1, value)) * 100, 1, 1201)); }
+  function sliderToMarketCap(value) { const number = Number(value); if (number <= 0) return 0; return engine.clamp(Math.pow(10, (number - 1) / 100), 0, 1e12); }
+  function persistNow() { clearTimeout(saveTimer); saveTimer = null; if (!state) return; const result = storage.saveState(state); elements.saveStatus.textContent = result.ok ? '自動保存済み' : '保存できません'; if (!result.ok) announce(elements.dataMessage, result.message || '保存できませんでした。', true); }
+  function scheduleSave() { clearTimeout(saveTimer); elements.saveStatus.textContent = '保存待ち'; saveTimer = setTimeout(persistNow, 900); }
+  function renderIdentity() { const company = currentCompany(); elements.companyNameDisplay.textContent = company.name; elements.currentPrice.textContent = formatMoney(company.price); elements.priceChange.textContent = (company.lastChange >= 0 ? '+' : '') + formatNumber(company.lastChange, 2) + '%'; setSignedClass(elements.priceChange, company.lastChange); elements.dayLabel.textContent = 'Day ' + state.day; elements.priceDragHandle.setAttribute('aria-valuenow', String(company.price)); elements.priceDragHandle.setAttribute('aria-valuetext', formatMoney(company.price)); }
+  function renderControls() { const company = currentCompany(); if (document.activeElement !== elements.companyName) elements.companyName.value = company.name; if (document.activeElement !== elements.companyTicker) elements.companyTicker.value = company.ticker; elements.priceSlider.value = String(priceToSlider(company.price)); if (document.activeElement !== elements.priceNumber) elements.priceNumber.value = String(company.price); elements.marketCapSlider.value = String(marketCapToSlider(company.marketCap)); if (document.activeElement !== elements.marketCapNumber) elements.marketCapNumber.value = String(company.marketCap); elements.perSlider.value = String(engine.clamp(company.per, -100, 300)); if (document.activeElement !== elements.perNumber) elements.perNumber.value = String(company.per); elements.volatilitySlider.value = String(engine.clamp(company.volatility, 0, 200)); if (document.activeElement !== elements.volatilityNumber) elements.volatilityNumber.value = String(company.volatility); elements.driftSlider.value = String(engine.clamp(company.drift, -100, 100)); if (document.activeElement !== elements.driftNumber) elements.driftNumber.value = String(company.drift); elements.moodSlider.value = String(state.marketMood); if (document.activeElement !== elements.moodNumber) elements.moodNumber.value = String(state.marketMood); elements.logicMode.value = company.logicMode; if (document.activeElement !== elements.sensitivityNumber) elements.sensitivityNumber.value = String(company.sensitivity); elements.allowNegativeCash.checked = state.allowNegativeCash; elements.allowShort.checked = state.allowShort; if (document.activeElement !== elements.tradeFee) elements.tradeFee.value = String(state.tradeFeePercent); }
+  function renderChart() { const company = currentCompany(); chart.setData(company.candles, state.trades); }
+  function renderPortfolio() { const portfolio = engine.portfolioValue(state); const position = currentPosition(); elements.portfolioTotal.textContent = formatMoney(portfolio.total); elements.portfolioCash.textContent = formatMoney(portfolio.cash); elements.positionQty.textContent = formatNumber(position.quantity, 0) + '株'; elements.portfolioProfit.textContent = formatMoney(portfolio.profit); elements.averagePrice.textContent = position.quantity ? formatMoney(position.averagePrice) : '-'; setSignedClass(elements.portfolioProfit, portfolio.profit); }
+  function renderTradeLog() { const fragment = document.createDocumentFragment(); const recent = state.trades.slice(0, 12); if (!recent.length) { const item = document.createElement('li'); item.textContent = 'まだ売買していません。'; fragment.appendChild(item); } else { for (const trade of recent) { const item = document.createElement('li'); item.textContent = 'D' + trade.day + ' ' + (trade.side === 'buy' ? '買い' : '売り') + ' ' + formatNumber(trade.quantity, 0) + '株 @ ' + formatMoney(trade.price); fragment.appendChild(item); } } elements.tradeLog.replaceChildren(fragment); }
+  function renderAll() { renderIdentity(); renderControls(); renderChart(); renderPortfolio(); renderTradeLog(); elements.undoAction.disabled = undoStack.length === 0; }
+  function applyPrice(value, group) { rememberContinuous(group); engine.setCurrentPrice(state, value); renderIdentity(); renderControls(); renderChart(); renderPortfolio(); scheduleSave(); }
+  function updateCompanyField(field, value, group) { rememberContinuous(group); engine.updateCompany(state, { [field]: value }); renderIdentity(); renderControls(); renderChart(); renderPortfolio(); scheduleSave(); }
+  function advance(days, remember) { if (remember !== false) rememberDiscrete(); engine.stepMarket(state, days); chart.resetView(); renderAll(); scheduleSave(); }
+  function setPlaying(enabled) { clearInterval(playTimer); playTimer = null; elements.togglePlay.setAttribute('aria-pressed', enabled ? 'true' : 'false'); elements.togglePlay.textContent = enabled ? '停止する' : '自動で進める'; if (!enabled) return; playTimer = setInterval(() => advance(1, false), Number(elements.playSpeed.value) || 800); }
+  function applyTrade(side) { const before = snapshot(); state.allowNegativeCash = elements.allowNegativeCash.checked; state.allowShort = elements.allowShort.checked; state.tradeFeePercent = engine.clamp(Number(elements.tradeFee.value) || 0, 0, 10); const result = engine.executeTrade(state, side, elements.tradeQuantity.value); if (!result.ok) { state = storage.validateState(before); announce(elements.tradeMessage, result.message, true); renderAll(); return; } pushUndo(before); announce(elements.tradeMessage, (side === 'buy' ? '買いました。' : '売りました。') + formatNumber(result.trade.quantity, 0) + '株 @ ' + formatMoney(result.trade.price), false); renderAll(); scheduleSave(); }
+  elements.companyName.addEventListener('change', () => { rememberDiscrete(); engine.updateCompany(state, { name: elements.companyName.value }); renderIdentity(); renderControls(); renderTradeLog(); scheduleSave(); });
+  elements.companyTicker.addEventListener('change', () => { rememberDiscrete(); engine.updateCompany(state, { ticker: elements.companyTicker.value }); renderControls(); scheduleSave(); });
+  elements.priceSlider.addEventListener('input', () => applyPrice(sliderToPrice(elements.priceSlider.value), 'price-slider'));
+  elements.priceNumber.addEventListener('input', () => { const value = Number(elements.priceNumber.value); if (Number.isFinite(value) && value > 0) applyPrice(value, 'price-number'); });
+  elements.marketCapSlider.addEventListener('input', () => updateCompanyField('marketCap', sliderToMarketCap(elements.marketCapSlider.value), 'market-cap-slider'));
+  elements.marketCapNumber.addEventListener('input', () => { const value = Number(elements.marketCapNumber.value); if (Number.isFinite(value) && value >= 0) updateCompanyField('marketCap', value, 'market-cap-number'); });
+  elements.perSlider.addEventListener('input', () => updateCompanyField('per', Number(elements.perSlider.value), 'per-slider'));
+  elements.perNumber.addEventListener('input', () => { const value = Number(elements.perNumber.value); if (Number.isFinite(value)) updateCompanyField('per', value, 'per-number'); });
+  elements.volatilitySlider.addEventListener('input', () => updateCompanyField('volatility', Number(elements.volatilitySlider.value), 'volatility-slider'));
+  elements.volatilityNumber.addEventListener('input', () => { const value = Number(elements.volatilityNumber.value); if (Number.isFinite(value)) updateCompanyField('volatility', value, 'volatility-number'); });
+  elements.driftSlider.addEventListener('input', () => updateCompanyField('drift', Number(elements.driftSlider.value), 'drift-slider'));
+  elements.driftNumber.addEventListener('input', () => { const value = Number(elements.driftNumber.value); if (Number.isFinite(value)) updateCompanyField('drift', value, 'drift-number'); });
+  elements.moodSlider.addEventListener('input', () => { rememberContinuous('mood-slider'); state.marketMood = engine.clamp(Number(elements.moodSlider.value) || 0, -100, 100); renderControls(); scheduleSave(); });
+  elements.moodNumber.addEventListener('input', () => { const value = Number(elements.moodNumber.value); if (!Number.isFinite(value)) return; rememberContinuous('mood-number'); state.marketMood = engine.clamp(value, -100, 100); renderControls(); scheduleSave(); });
+  elements.quickPriceButtons.forEach((button) => button.addEventListener('click', () => { rememberDiscrete(); engine.adjustCurrentPrice(state, Number(button.dataset.percent) || 0); renderAll(); scheduleSave(); }));
+  elements.step1.addEventListener('click', () => advance(1)); elements.step5.addEventListener('click', () => advance(5)); elements.step20.addEventListener('click', () => advance(20));
+  elements.togglePlay.addEventListener('click', () => { if (playTimer) { setPlaying(false); persistNow(); return; } rememberDiscrete(); setPlaying(true); }); elements.playSpeed.addEventListener('change', () => { if (playTimer) setPlaying(true); });
+  elements.chartOlder.addEventListener('click', () => chart.panBy(20)); elements.chartNewer.addEventListener('click', () => chart.panBy(-20)); elements.chartZoomIn.addEventListener('click', () => chart.zoomBy(0.8)); elements.chartZoomOut.addEventListener('click', () => chart.zoomBy(1.25)); elements.chartReset.addEventListener('click', () => chart.resetView());
+  elements.quantityButtons.forEach((button) => button.addEventListener('click', () => { elements.tradeQuantity.value = button.dataset.quantity || '100'; })); elements.buyButton.addEventListener('click', () => applyTrade('buy')); elements.sellButton.addEventListener('click', () => applyTrade('sell'));
+  elements.logicMode.addEventListener('change', () => { rememberDiscrete(); engine.updateCompany(state, { logicMode: elements.logicMode.value }); renderAll(); scheduleSave(); }); elements.sensitivityNumber.addEventListener('change', () => { rememberDiscrete(); engine.updateCompany(state, { sensitivity: Number(elements.sensitivityNumber.value) }); renderControls(); scheduleSave(); }); elements.allowNegativeCash.addEventListener('change', () => { rememberDiscrete(); state.allowNegativeCash = elements.allowNegativeCash.checked; scheduleSave(); }); elements.allowShort.addEventListener('change', () => { rememberDiscrete(); state.allowShort = elements.allowShort.checked; scheduleSave(); }); elements.tradeFee.addEventListener('change', () => { rememberDiscrete(); state.tradeFeePercent = engine.clamp(Number(elements.tradeFee.value) || 0, 0, 10); renderControls(); scheduleSave(); });
+  elements.undoAction.addEventListener('click', () => { const previous = undoStack.pop(); if (!previous) return; setPlaying(false); state = storage.validateState(previous); chart.resetView(); renderAll(); persistNow(); announce(elements.dataMessage, '1つ前の状態に戻しました。', false); });
+  elements.resetData.addEventListener('click', () => { if (!window.confirm('テスト企業、チャート、売買履歴を初期状態へ戻しますか。')) return; rememberDiscrete(); setPlaying(false); state = engine.createDefaultState(); chart.resetView(); renderAll(); persistNow(); announce(elements.dataMessage, '最初の状態へ戻しました。', false); });
+  elements.exportData.addEventListener('click', () => { try { storage.exportState(state); announce(elements.dataMessage, 'JSONバックアップを書き出しました。', false); } catch (error) { announce(elements.dataMessage, error instanceof Error ? error.message : '書き出せませんでした。', true); } });
+  elements.importData.addEventListener('change', async () => { const file = elements.importData.files && elements.importData.files[0]; if (!file) return; try { const imported = await storage.importFile(file); rememberDiscrete(); setPlaying(false); state = imported; chart.resetView(); renderAll(); persistNow(); announce(elements.dataMessage, 'JSONバックアップを読み込みました。', false); } catch (error) { announce(elements.dataMessage, error instanceof Error ? error.message : 'JSONを読み込めませんでした。', true); } finally { elements.importData.value = ''; } });
+  let priceDrag = null; elements.priceDragHandle.addEventListener('pointerdown', (event) => { rememberContinuous('chart-price-drag'); const company = currentCompany(); priceDrag = { pointerId: event.pointerId, startY: event.clientY, startPrice: company.price }; elements.priceDragHandle.setPointerCapture(event.pointerId); elements.priceDragHandle.classList.add('dragging'); }); elements.priceDragHandle.addEventListener('pointermove', (event) => { if (!priceDrag || priceDrag.pointerId !== event.pointerId) return; const factor = Math.exp((priceDrag.startY - event.clientY) / 160); engine.setCurrentPrice(state, priceDrag.startPrice * factor); renderIdentity(); renderControls(); renderChart(); renderPortfolio(); }); const endPriceDrag = (event) => { if (!priceDrag || priceDrag.pointerId !== event.pointerId) return; priceDrag = null; elements.priceDragHandle.classList.remove('dragging'); scheduleSave(); }; elements.priceDragHandle.addEventListener('pointerup', endPriceDrag); elements.priceDragHandle.addEventListener('pointercancel', endPriceDrag); elements.priceDragHandle.addEventListener('keydown', (event) => { const map = { ArrowUp: 1, ArrowDown: -1, PageUp: 10, PageDown: -10 }; if (!Object.prototype.hasOwnProperty.call(map, event.key)) return; event.preventDefault(); rememberContinuous('chart-price-key'); engine.adjustCurrentPrice(state, map[event.key]); renderAll(); scheduleSave(); });
+  document.addEventListener('visibilitychange', () => { if (document.hidden) { if (playTimer) setPlaying(false); persistNow(); } }); window.addEventListener('pagehide', persistNow);
+  const loaded = storage.loadState(); if (loaded.ok) { state = loaded.state; if (loaded.migrated) announce(elements.dataMessage, '旧版の選択銘柄を1つのテスト企業モードへ移しました。旧版データ自体は残しています。', false); } else { state = engine.createDefaultState(); if (loaded.message) announce(elements.dataMessage, loaded.message + ' 初期状態を作りました。', true); }
+  renderAll(); persistNow();
 }());
