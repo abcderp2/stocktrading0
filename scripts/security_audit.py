@@ -72,11 +72,17 @@ def scan_history() -> list[str]:
         print("WARNING: Git history is unavailable; skipped historical secret scan")
         return issues
 
-    combined = re.compile("|".join(f"(?:{pattern.pattern})" for pattern in SECRET_PATTERNS.values()))
+    history_pattern = (
+        r"gh[pousr]_[A-Za-z0-9]{20,}|"
+        r"github_pat_[A-Za-z0-9_]{20,}|"
+        r"sk-[A-Za-z0-9_-]{20,}|"
+        r"BEGIN [A-Z ]*PRIVATE KEY|"
+        r"AKIA[0-9A-Z]{16}"
+    )
     for commit in commits[:300]:
         try:
             result = subprocess.run(
-                ["git", "grep", "-I", "-n", "-E", combined.pattern, commit, "--", "."],
+                ["git", "grep", "-I", "-n", "-E", history_pattern, commit, "--", "."],
                 cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
             )
         except OSError:
