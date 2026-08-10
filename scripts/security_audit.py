@@ -92,24 +92,32 @@ def scan_history() -> list[str]:
         r"BEGIN [A-Z ]*PRIVATE KEY|"
         r"AKIA[0-9A-Z]{16}"
     )
-    for commit in commits[:300]:
+    for commit in commits:
         try:
             result = subprocess.run(
                 ["git", "grep", "-I", "-n", "-E", history_pattern, commit, "--", "."],
-                cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             )
-        except OSError:
+        except OSError as error:
+            issues.append(f"historical secret scan could not execute git grep: {error}")
             break
         if result.returncode == 0 and result.stdout.strip():
             first = result.stdout.splitlines()[0]
             issues.append(f"secret-like pattern found in reachable history: {first[:240]}")
             break
+        if result.returncode not in {0, 1}:
+            detail = result.stderr.strip().splitlines()
+            message = detail[0][:180] if detail else f"git grep exited with {result.returncode}"
+            issues.append(f"historical secret scan failed at {commit[:12]}: {message}")
+            break
+    if not issues:
+        print(f"OK: scanned all {len(commits)} reachable commit(s) for high-signal secret patterns")
     return issues
 
 
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--history", action="store_true", help="also scan reachable Git history for high-signal secret patterns")
+    parser.add_argument("--history", action="store_true", help="also scan all reachable Git history for high-signal secret patterns")
     args = parser.parse_args()
 
     issues = scan_current()
