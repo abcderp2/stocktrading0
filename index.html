@@ -3,17 +3,17 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <meta name="description" content="テスト企業の名前、株価、時価総額、PERなどを自由に動かし、チャートと模擬売買で遊べる株価サンドボックスです。">
+  <meta name="description" content="テスト企業の株価を1,000円から始め、現実らしい日付と日足・週足・月足を使いながら自由な値動きで遊べる架空株価サンドボックスです。">
   <meta name="robots" content="index,follow">
   <meta name="referrer" content="no-referrer">
   <meta name="color-scheme" content="light dark">
   <meta name="theme-color" content="#0f172a">
   <meta property="og:type" content="website">
-  <meta property="og:title" content="株価あそび場 | 架空株価シミュレーター">
-  <meta property="og:description" content="スライダーとチャートを触って株価を動かし、買う、売る、時間を進める。実在データを使わない自由な株価サンドボックス。">
+  <meta property="og:title" content="株価あそび場 | 日付つき架空株価シミュレーター">
+  <meta property="og:description" content="株価1,000円から開始。日付、曜日、日足・週足・月足を備えた、現実っぽい見た目で自由に遊べる架空株価サンドボックス。">
   <meta property="og:url" content="https://abcderp2.github.io/stocktrading0/">
   <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data:; connect-src 'none'; font-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'; frame-src 'none'; media-src 'none'; worker-src 'none'">
-  <title>株価あそび場 | 架空株価シミュレーター</title>
+  <title>株価あそび場 | 日付つき架空株価シミュレーター</title>
   <link rel="canonical" href="https://abcderp2.github.io/stocktrading0/">
   <link rel="stylesheet" href="assets/css/style.css">
   <script defer src="assets/js/market-engine.js"></script>
@@ -28,7 +28,7 @@
     <div>
       <p class="eyebrow">FICTIONAL STOCK PLAYGROUND</p>
       <h1>株価あそび場</h1>
-      <p class="lead">名前を変える。株価を動かす。買う。時間を進める。それだけで遊べます。</p>
+      <p class="lead">現実みたいな日付とローソク足。でも値動きと数字は自由です。</p>
     </div>
     <div class="header-actions">
       <a class="status-pill" href="https://github.com/abcderp2/stocktrading0" target="_blank" rel="noopener noreferrer" aria-label="GitHubリポジトリを新しいタブで開く">GitHub</a>
@@ -42,9 +42,9 @@
     <section class="quick-guide panel" aria-labelledby="guide-title">
       <h2 id="guide-title">まずは3つだけ</h2>
       <div class="guide-grid">
-        <div><strong>1</strong><span>「テスト企業」の名前を好きに変える</span></div>
-        <div><strong>2</strong><span>株価スライダーかチャート右のつまみを動かす</span></div>
-        <div><strong>3</strong><span>買う、売る、1日進めるを押して遊ぶ</span></div>
+        <div><strong>1</strong><span>株価は1,000円から。スライダーやチャートで自由に動かす</span></div>
+        <div><strong>2</strong><span>日足・週足・月足を切り替えてチャートを見る</span></div>
+        <div><strong>3</strong><span>買う、売る、1日進めるを押して日付を進める</span></div>
       </div>
     </section>
 
@@ -60,15 +60,47 @@
             <strong id="current-price">¥1,000</strong>
             <span id="price-change" class="muted">0.00%</span>
           </div>
-          <span id="day-label" class="day-pill">Day 60</span>
+          <div class="date-block">
+            <span id="market-date" class="market-date">----</span>
+            <span id="day-label" class="day-pill">60営業日目</span>
+          </div>
+        </div>
+
+        <div class="chart-modes" aria-label="チャート表示設定">
+          <div class="mode-group">
+            <span>足</span>
+            <div class="segmented" id="timeframe-controls">
+              <button class="timeframe-button active" type="button" data-timeframe="1d" aria-pressed="true">日足</button>
+              <button class="timeframe-button" type="button" data-timeframe="1w" aria-pressed="false">週足</button>
+              <button class="timeframe-button" type="button" data-timeframe="1m" aria-pressed="false">月足</button>
+            </div>
+          </div>
+          <div class="mode-group">
+            <span>期間</span>
+            <div class="segmented" id="range-controls">
+              <button class="range-button" type="button" data-range="1m" aria-pressed="false">1か月</button>
+              <button class="range-button active" type="button" data-range="3m" aria-pressed="true">3か月</button>
+              <button class="range-button" type="button" data-range="1y" aria-pressed="false">1年</button>
+              <button class="range-button" type="button" data-range="all" aria-pressed="false">全期間</button>
+            </div>
+          </div>
         </div>
 
         <div class="chart-wrap">
-          <canvas id="market-chart" role="img" aria-label="テスト企業のローソク足チャート。横ドラッグで過去を見られ、2本指またはホイールで拡大縮小できます。">チャートを描画できない環境では、下の数値操作を利用できます。</canvas>
+          <canvas id="market-chart" role="img" aria-label="テスト企業のローソク足チャート。横ドラッグで過去を見られ、タップするとその足の始値、高値、安値、終値を確認できます。">チャートを描画できない環境では、下の数値操作を利用できます。</canvas>
           <button id="price-drag-handle" class="price-drag-handle" type="button" role="slider"
             aria-label="株価を上下に動かす" aria-valuemin="0.01" aria-valuemax="1000000000000"
             aria-valuenow="1000" aria-valuetext="1000円">上下に動かす</button>
-          <div class="chart-hint">チャート右のつまみを上下にドラッグすると株価が変わります</div>
+          <div class="chart-hint">右のつまみで株価変更。ローソクをタップすると詳細表示</div>
+        </div>
+
+        <div class="candle-detail" aria-live="polite" aria-label="選択したローソク足の詳細">
+          <div class="detail-date"><span id="detail-period">最新の日足</span><strong id="detail-date">-</strong></div>
+          <div><span>始値</span><strong id="detail-open">-</strong></div>
+          <div><span>高値</span><strong id="detail-high">-</strong></div>
+          <div><span>安値</span><strong id="detail-low">-</strong></div>
+          <div><span>終値</span><strong id="detail-close">-</strong></div>
+          <div><span>値幅</span><strong id="detail-range">-</strong></div>
         </div>
 
         <div class="chart-toolbar" aria-label="チャートを見る">
@@ -98,38 +130,30 @@
 
         <div class="control-stack">
           <div class="control-row featured-control">
-            <div class="control-label">
-              <strong>株価</strong>
-              <small>0.01円から1兆円まで。スライダーは対数目盛です。</small>
-            </div>
+            <div class="control-label"><strong>株価</strong><small>初期値1,000円。0.01円から1兆円まで自由です。</small></div>
             <input id="price-slider" type="range" min="0" max="1400" step="1" value="500" aria-label="株価スライダー">
             <div class="number-with-unit"><input id="price-number" type="number" inputmode="decimal" min="0.01" max="1000000000000" step="0.01" aria-label="株価 直接入力 円"><span>円</span></div>
           </div>
-
           <div class="control-row">
-            <div class="control-label"><strong>時価総額</strong><small>現実の関係を無視して自由に設定できます。</small></div>
+            <div class="control-label"><strong>時価総額</strong><small>現実の計算関係を無視して自由に設定できます。</small></div>
             <input id="market-cap-slider" type="range" min="0" max="1201" step="1" value="401" aria-label="時価総額スライダー">
             <div class="number-with-unit"><input id="market-cap-number" type="number" inputmode="decimal" min="0" max="1000000000000" step="0.1" aria-label="時価総額 直接入力 億円"><span>億円</span></div>
           </div>
-
           <div class="control-row">
-            <div class="control-label"><strong>PER</strong><small>マイナスや大きな数値も直接入力できます。</small></div>
+            <div class="control-label"><strong>PER</strong><small>マイナスや大きな数値も入力できます。</small></div>
             <input id="per-slider" type="range" min="-100" max="300" step="1" value="15" aria-label="PERスライダー">
             <div class="number-with-unit"><input id="per-number" type="number" inputmode="decimal" min="-10000" max="10000" step="0.1" aria-label="PER 直接入力 倍"><span>倍</span></div>
           </div>
-
           <div class="control-row">
             <div class="control-label"><strong>値動きの激しさ</strong><small>高いほど1日ごとの揺れが大きくなります。</small></div>
             <input id="volatility-slider" type="range" min="0" max="200" step="1" value="30" aria-label="値動きの激しさ">
             <div class="number-with-unit"><input id="volatility-number" type="number" inputmode="decimal" min="0" max="500" step="0.1" aria-label="値動きの激しさ 直接入力 パーセント"><span>%</span></div>
           </div>
-
           <div class="control-row">
             <div class="control-label"><strong>上がりやすさ</strong><small>プラスで上向き、マイナスで下向きの傾向です。</small></div>
             <input id="drift-slider" type="range" min="-100" max="100" step="1" value="5" aria-label="上がりやすさ">
             <div class="number-with-unit"><input id="drift-number" type="number" inputmode="decimal" min="-500" max="500" step="0.1" aria-label="上がりやすさ 直接入力 パーセント"><span>%</span></div>
           </div>
-
           <div class="control-row">
             <div class="control-label"><strong>市場ムード</strong><small>悲観から熱狂まで、次の日の動きへ少し影響します。</small></div>
             <input id="mood-slider" type="range" min="-100" max="100" step="1" value="0" aria-label="市場ムード">
@@ -141,10 +165,9 @@
 
     <section class="action-grid">
       <section class="panel time-panel" aria-labelledby="time-title">
-        <div class="section-title compact-title">
-          <div><p class="kicker">TIME</p><h2 id="time-title">時間を進める</h2></div>
-        </div>
+        <div class="section-title compact-title"><div><p class="kicker">TIME</p><h2 id="time-title">日付を進める</h2></div></div>
         <button id="step-1" class="hero-action" type="button">1日進める</button>
+        <p id="calendar-note" class="small-note">初期設定では土日を飛ばして次の平日へ進みます。</p>
         <div class="button-grid">
           <button id="step-5" type="button">5日進める</button>
           <button id="step-20" type="button">20日進める</button>
@@ -156,10 +179,7 @@
       </section>
 
       <section class="panel trade-panel" aria-labelledby="trade-title">
-        <div class="section-title compact-title">
-          <div><p class="kicker">TRADE</p><h2 id="trade-title">買ってみる</h2></div>
-        </div>
-
+        <div class="section-title compact-title"><div><p class="kicker">TRADE</p><h2 id="trade-title">買ってみる</h2></div></div>
         <div class="portfolio-grid">
           <div><span>総資産</span><strong id="portfolio-total">-</strong></div>
           <div><span>現金</span><strong id="portfolio-cash">-</strong></div>
@@ -167,25 +187,15 @@
           <div><span>平均購入価格</span><strong id="average-price">-</strong></div>
           <div class="wide-stat"><span>損益</span><strong id="portfolio-profit">-</strong></div>
         </div>
-
-        <label class="trade-quantity">
-          <span>何株にする？</span>
-          <input id="trade-quantity" type="number" inputmode="numeric" min="1" max="100000000" step="1" value="100">
-        </label>
+        <label class="trade-quantity"><span>何株にする？</span><input id="trade-quantity" type="number" inputmode="numeric" min="1" max="100000000" step="1" value="100"></label>
         <div class="preset-row">
           <button class="quantity-preset" type="button" data-quantity="10">10株</button>
           <button class="quantity-preset" type="button" data-quantity="100">100株</button>
           <button class="quantity-preset" type="button" data-quantity="1000">1000株</button>
         </div>
-        <div class="trade-buttons">
-          <button id="buy-button" class="buy-button" type="button">買う</button>
-          <button id="sell-button" class="sell-button" type="button">売る</button>
-        </div>
+        <div class="trade-buttons"><button id="buy-button" class="buy-button" type="button">買う</button><button id="sell-button" class="sell-button" type="button">売る</button></div>
         <p id="trade-message" class="notice" aria-live="polite">最初の資金は100万円です。すべて架空のお金です。</p>
-        <details>
-          <summary>最近の売買を見る</summary>
-          <ol id="trade-log" class="trade-log"></ol>
-        </details>
+        <details><summary>最近の売買を見る</summary><ol id="trade-log" class="trade-log"></ol></details>
       </section>
     </section>
 
@@ -194,6 +204,7 @@
         <summary>もっと自由に設定する</summary>
         <div class="advanced-grid">
           <label><span>銘柄コード</span><input id="company-ticker" type="text" maxlength="10" autocomplete="off" value="TEST"></label>
+          <label><span>市場カレンダー</span><select id="calendar-mode"><option value="weekdays">平日のみ</option><option value="everyday">365日</option></select></label>
           <label><span>材料への反応</span><input id="sensitivity-number" type="number" inputmode="decimal" min="0" max="10" step="0.1" value="1"></label>
           <label><span>指標の動き方</span><select id="logic-mode"><option value="free">株価と別々に動かす</option><option value="linked">株価に比例させる</option></select></label>
           <label><span>取引コスト</span><div class="number-with-unit"><input id="trade-fee" type="number" inputmode="decimal" min="0" max="10" step="0.01" value="0"><span>%</span></div></label>
@@ -204,25 +215,24 @@
     </section>
 
     <section class="panel data-panel" aria-labelledby="data-title">
-      <div class="section-title compact-title">
-        <div><p class="kicker">SAVE</p><h2 id="data-title">保存とやり直し</h2></div>
-      </div>
-      <p>変更はこの端末のブラウザー内へ自動保存されます。サーバー送信、ログイン、課金、広告、アクセス解析はありません。</p>
-      <div class="button-grid data-buttons">
+      <div class="section-title compact-title"><div><p class="kicker">SAVE</p><h2 id="data-title">保存とやり直し</h2></div></div>
+      <p>変更はこの端末のブラウザー内へ自動保存します。旧版の保存データは削除せず、新形式へ読み替えられます。</p>
+      <div class="button-grid data-actions">
         <button id="export-data" type="button">JSONバックアップ</button>
         <label class="file-button">JSONを読み込む<input id="import-data" type="file" accept="application/json,.json"></label>
       </div>
-      <p id="data-message" class="notice" aria-live="polite">上の「1つ戻す」と「最初から」はいつでも使えます。</p>
+      <p id="data-message" class="notice" aria-live="polite">「1つ戻す」と「最初から」で簡単にやり直せます。</p>
     </section>
 
-    <section class="plain-note">
-      <p>このサイトの企業名、株価、指標、損益はすべて架空です。実在の市場データや投資助言ではありません。</p>
-      <noscript><p class="notice warning">このサンドボックスの操作にはJavaScriptが必要です。</p></noscript>
+    <section class="panel info-panel" aria-labelledby="info-title">
+      <h2 id="info-title">このサイトについて</h2>
+      <p>企業、株価、時価総額、PER、値動き、売買結果はすべて架空です。日付とローソク足の見た目は現実らしくしていますが、投資助言や実市場の再現ではありません。</p>
+      <p>外部株価API、アカウント、広告、解析、課金、外部JavaScriptは使いません。</p>
     </section>
   </main>
 
   <footer class="site-footer">
-    <p>株価あそび場。実在の市場データは使用していません。</p>
+    <p>株価あそび場。架空株価シミュレーター。実在市場データは使用しません。</p>
     <p><a href="https://github.com/abcderp2/stocktrading0" target="_blank" rel="noopener noreferrer">GitHubリポジトリ</a>　<a href="llms.txt">AI向け公開方針 日本語と英語</a></p>
   </footer>
 </body>
