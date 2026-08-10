@@ -3,274 +3,62 @@
 
   const root = window.StockSandbox = window.StockSandbox || {};
   const MAX_COMPANIES = 1;
-  const MAX_CANDLES = 1200;
+  const MAX_CANDLES = 7500;
   const MAX_TRADES = 300;
   const MAX_TRADE_QUANTITY = 100000000;
   const MAX_POSITION = 1000000000;
   const MAX_ACCOUNT_VALUE = 1e30;
+  const MAX_VOLUME = 1e12;
   const MIN_PRICE = 0.01;
   const MAX_PRICE = 1e12;
   const START_PRICE = 1000;
-  const SCHEMA_VERSION = 3;
+  const HISTORY_YEARS = 20;
+  const SCHEMA_VERSION = 4;
   const COMPANY_ID = 'company-main';
   const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 
   function clamp(value, min, max) { return Math.min(max, Math.max(min, value)); }
   function finiteNumber(value, fallback) { const number = Number(value); return Number.isFinite(number) ? number : fallback; }
-  function cleanDisplayText(value, fallback, maxLength) {
-    const text = String(value || fallback).replace(/[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/g, '').trim().slice(0, maxLength);
-    return text || fallback;
-  }
-  function randomUint32() {
-    if (window.crypto && typeof window.crypto.getRandomValues === 'function') {
-      const buffer = new Uint32Array(1); window.crypto.getRandomValues(buffer); return buffer[0] || 0x9e3779b9;
-    }
-    return ((Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0) || 0x9e3779b9;
-  }
-  function random01(state) {
-    let x = state.rngState >>> 0;
-    if (x === 0) x = 0x9e3779b9;
-    x ^= x << 13; x ^= x >>> 17; x ^= x << 5;
-    state.rngState = x >>> 0;
-    return state.rngState / 4294967296;
-  }
-  function gaussian(state) {
-    const u1 = Math.max(random01(state), 1e-12); const u2 = random01(state);
-    return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
-  }
-  function parseIsoDate(value) {
-    if (typeof value !== 'string' || !DATE_RE.test(value)) return null;
-    const [year, month, day] = value.split('-').map(Number);
-    const date = new Date(year, month - 1, day, 12, 0, 0, 0);
-    if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return null;
-    return date;
-  }
-  function toIsoDate(date) {
-    const year = date.getFullYear(); const month = String(date.getMonth() + 1).padStart(2, '0'); const day = String(date.getDate()).padStart(2, '0');
-    return year + '-' + month + '-' + day;
-  }
+  function cleanDisplayText(value, fallback, maxLength) { const text = String(value || fallback).replace(/[\u0000-\u001f\u007f-\u009f\u202a-\u202e\u2066-\u2069]/g, '').trim().slice(0, maxLength); return text || fallback; }
+  function randomUint32() { if (window.crypto && typeof window.crypto.getRandomValues === 'function') { const buffer = new Uint32Array(1); window.crypto.getRandomValues(buffer); return buffer[0] || 0x9e3779b9; } return ((Date.now() ^ Math.floor(Math.random() * 0xffffffff)) >>> 0) || 0x9e3779b9; }
+  function random01(state) { let x = state.rngState >>> 0; if (x === 0) x = 0x9e3779b9; x ^= x << 13; x ^= x >>> 17; x ^= x << 5; state.rngState = x >>> 0; return state.rngState / 4294967296; }
+  function gaussian(state) { const u1 = Math.max(random01(state), 1e-12); const u2 = random01(state); return Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2); }
+  function parseIsoDate(value) { if (typeof value !== 'string' || !DATE_RE.test(value)) return null; const parts = value.split('-').map(Number); const date = new Date(parts[0], parts[1] - 1, parts[2], 12, 0, 0, 0); if (date.getFullYear() !== parts[0] || date.getMonth() !== parts[1] - 1 || date.getDate() !== parts[2]) return null; return date; }
+  function toIsoDate(date) { return [String(date.getFullYear()).padStart(4, '0'), String(date.getMonth() + 1).padStart(2, '0'), String(date.getDate()).padStart(2, '0')].join('-'); }
   function todayIso() { return toIsoDate(new Date()); }
   function isWeekend(date) { const weekday = date.getDay(); return weekday === 0 || weekday === 6; }
-  function normalizeAnchorDate(value, calendarMode) {
-    const date = parseIsoDate(value) || parseIsoDate(todayIso());
-    if (calendarMode === 'everyday') return toIsoDate(date);
-    while (isWeekend(date)) date.setDate(date.getDate() - 1);
-    return toIsoDate(date);
-  }
-  function nextMarketDate(value, calendarMode) {
-    const date = parseIsoDate(value) || parseIsoDate(todayIso());
-    do { date.setDate(date.getDate() + 1); } while (calendarMode !== 'everyday' && isWeekend(date));
-    return toIsoDate(date);
-  }
-  function previousMarketDate(value, calendarMode) {
-    const date = parseIsoDate(value) || parseIsoDate(todayIso());
-    do { date.setDate(date.getDate() - 1); } while (calendarMode !== 'everyday' && isWeekend(date));
-    return toIsoDate(date);
-  }
-  function tradingDatesEnding(anchorDate, count, calendarMode) {
-    const total = clamp(Math.floor(finiteNumber(count, 1)), 1, MAX_CANDLES);
-    const dates = [normalizeAnchorDate(anchorDate, calendarMode)];
-    while (dates.length < total) dates.unshift(previousMarketDate(dates[0], calendarMode));
-    return dates;
-  }
-  function normalizeCompanyInput(input) {
-    const source = input && typeof input === 'object' ? input : {};
-    return {
-      name: cleanDisplayText(source.name, 'テスト企業', 40),
-      ticker: String(source.ticker || 'TEST').trim().toUpperCase().replace(/[^A-Z0-9._-]/g, '').slice(0, 10) || 'TEST',
-      price: clamp(finiteNumber(source.price, START_PRICE), MIN_PRICE, MAX_PRICE),
-      marketCap: clamp(finiteNumber(source.marketCap, 10000), 0, 1e12),
-      per: clamp(finiteNumber(source.per, 15), -10000, 10000),
-      volatility: clamp(finiteNumber(source.volatility, 30), 0, 500),
-      drift: clamp(finiteNumber(source.drift, 5), -500, 500),
-      sensitivity: clamp(finiteNumber(source.sensitivity, 1), 0, 10),
-      logicMode: source.logicMode === 'linked' ? 'linked' : 'free'
-    };
-  }
-  function generateHistory(state, company, anchorDate, count) {
-    const dates = tradingDatesEnding(anchorDate, count, state.calendarMode);
-    const candles = [];
-    let previousClose = START_PRICE;
-    for (let index = 0; index < dates.length; index += 1) {
-      const dailyVol = (company.volatility / 100) / Math.sqrt(252);
-      const open = clamp(previousClose * Math.exp(gaussian(state) * dailyVol * 0.12), MIN_PRICE, MAX_PRICE);
-      const close = clamp(open * Math.exp((company.drift / 100) / 252 + gaussian(state) * dailyVol), MIN_PRICE, MAX_PRICE);
-      const span = Math.max(Math.abs(close - open), open * dailyVol * (0.25 + random01(state) * 0.75));
-      const high = clamp(Math.max(open, close) + span * (0.2 + random01(state)), MIN_PRICE, MAX_PRICE);
-      const low = clamp(Math.min(open, close) - span * (0.2 + random01(state)), MIN_PRICE, MAX_PRICE);
-      candles.push({ day: index + 1, date: dates[index], open, high: Math.max(open, close, high), low: Math.max(MIN_PRICE, Math.min(open, close, low)), close });
-      previousClose = close;
-    }
-    const finalClose = candles[candles.length - 1].close;
-    const scale = START_PRICE / finalClose;
-    for (const candle of candles) {
-      candle.open = clamp(candle.open * scale, MIN_PRICE, MAX_PRICE);
-      candle.high = clamp(candle.high * scale, MIN_PRICE, MAX_PRICE);
-      candle.low = clamp(candle.low * scale, MIN_PRICE, MAX_PRICE);
-      candle.close = clamp(candle.close * scale, MIN_PRICE, MAX_PRICE);
-      candle.high = Math.max(candle.open, candle.close, candle.high);
-      candle.low = Math.max(MIN_PRICE, Math.min(candle.open, candle.close, candle.low));
-    }
-    candles[candles.length - 1].close = START_PRICE;
-    candles[candles.length - 1].high = Math.max(candles[candles.length - 1].high, START_PRICE);
-    candles[candles.length - 1].low = Math.min(candles[candles.length - 1].low, START_PRICE);
-    company.candles = candles;
-    company.price = START_PRICE;
-    company.metricBasePrice = START_PRICE;
-    state.day = candles[candles.length - 1].day;
-    state.currentDate = candles[candles.length - 1].date;
-  }
-  function createDefaultState(seed, anchorDate) {
-    const state = {
-      schemaVersion: SCHEMA_VERSION, rngState: (seed >>> 0) || randomUint32(), sequence: 0, day: 1,
-      currentDate: '', calendarMode: 'weekdays', marketMood: 0, marketVolatility: 100,
-      cash: 1000000, initialCash: 1000000, realizedProfit: 0,
-      allowNegativeCash: false, allowShort: false, tradeFeePercent: 0,
-      selectedCompanyId: COMPANY_ID, positions: Object.create(null), trades: [], companies: []
-    };
-    const company = normalizeCompanyInput({ name: 'テスト企業', ticker: 'TEST', price: START_PRICE, marketCap: 10000, per: 15, volatility: 30, drift: 5, sensitivity: 1, logicMode: 'free' });
-    company.id = COMPANY_ID; company.metricBasePrice = START_PRICE; company.metricBaseMarketCap = company.marketCap; company.metricBasePer = company.per; company.pendingShock = 0; company.lastChange = 0; company.candles = [];
-    state.companies.push(company);
-    generateHistory(state, company, anchorDate || todayIso(), 60);
-    updateLastChange(company);
-    return state;
-  }
+  function isSimpleMarketHoliday(date) { const month = date.getMonth() + 1; const day = date.getDate(); return (month === 1 && day <= 3) || (month === 12 && day === 31); }
+  function isMarketOpenDate(date, calendarMode) { if (calendarMode === 'everyday') return true; return !isWeekend(date) && !isSimpleMarketHoliday(date); }
+  function normalizeAnchorDate(value, calendarMode) { const date = parseIsoDate(value) || parseIsoDate(todayIso()); while (!isMarketOpenDate(date, calendarMode)) date.setDate(date.getDate() - 1); return toIsoDate(date); }
+  function nextMarketDate(value, calendarMode) { const date = parseIsoDate(value) || parseIsoDate(todayIso()); do { date.setDate(date.getDate() + 1); } while (!isMarketOpenDate(date, calendarMode)); return toIsoDate(date); }
+  function previousMarketDate(value, calendarMode) { const date = parseIsoDate(value) || parseIsoDate(todayIso()); do { date.setDate(date.getDate() - 1); } while (!isMarketOpenDate(date, calendarMode)); return toIsoDate(date); }
+  function marketDatesForYearsEnding(anchorDate, years, calendarMode) { const endIso = normalizeAnchorDate(anchorDate, calendarMode); const end = parseIsoDate(endIso); const start = new Date(end.getFullYear() - clamp(Math.floor(finiteNumber(years, HISTORY_YEARS)), 1, 30), end.getMonth(), end.getDate(), 12, 0, 0, 0); const dates = []; const cursor = new Date(start.getTime()); while (cursor <= end && dates.length < MAX_CANDLES) { if (isMarketOpenDate(cursor, calendarMode)) dates.push(toIsoDate(cursor)); cursor.setDate(cursor.getDate() + 1); } if (!dates.length) dates.push(endIso); return dates.slice(-MAX_CANDLES); }
+  function tradingDatesEnding(anchorDate, count, calendarMode) { const total = clamp(Math.floor(finiteNumber(count, 1)), 1, MAX_CANDLES); const dates = [normalizeAnchorDate(anchorDate, calendarMode)]; while (dates.length < total) dates.unshift(previousMarketDate(dates[0], calendarMode)); return dates; }
+  function shiftDateByMonths(value, months) { const date = parseIsoDate(value); if (!date) return ''; const day = date.getDate(); date.setDate(1); date.setMonth(date.getMonth() + months); const lastDay = new Date(date.getFullYear(), date.getMonth() + 1, 0, 12).getDate(); date.setDate(Math.min(day, lastDay)); return toIsoDate(date); }
+  function shiftDateByYears(value, years) { const date = parseIsoDate(value); if (!date) return ''; const month = date.getMonth(); const day = date.getDate(); date.setFullYear(date.getFullYear() + years, month, 1); const lastDay = new Date(date.getFullYear(), month + 1, 0, 12).getDate(); date.setDate(Math.min(day, lastDay)); return toIsoDate(date); }
+  function normalizeCompanyInput(input) { const source = input && typeof input === 'object' ? input : {}; return { name: cleanDisplayText(source.name, 'テスト企業', 40), ticker: String(source.ticker || 'TEST').trim().toUpperCase().replace(/[^A-Z0-9._-]/g, '').slice(0, 10) || 'TEST', price: clamp(finiteNumber(source.price, START_PRICE), MIN_PRICE, MAX_PRICE), marketCap: clamp(finiteNumber(source.marketCap, 10000), 0, 1e12), per: clamp(finiteNumber(source.per, 15), -10000, 10000), volatility: clamp(finiteNumber(source.volatility, 30), 0, 500), drift: clamp(finiteNumber(source.drift, 5), -500, 500), sensitivity: clamp(finiteNumber(source.sensitivity, 1), 0, 10), logicMode: source.logicMode === 'linked' ? 'linked' : 'free' }; }
+  function generatedVolume(state, company, open, close) { const move = Math.abs(close / Math.max(open, MIN_PRICE) - 1); const volFactor = 0.45 + random01(state) * 1.2 + move * 18 + company.volatility / 180; return Math.floor(clamp(450000 * volFactor, 1000, MAX_VOLUME)); }
+  function generateHistory(state, company, anchorDate, years) { const dates = marketDatesForYearsEnding(anchorDate, years, state.calendarMode); const candles = []; let previousClose = START_PRICE; for (let index = 0; index < dates.length; index += 1) { const dailyVol = (company.volatility / 100) / Math.sqrt(252); const open = clamp(previousClose * Math.exp(gaussian(state) * dailyVol * 0.12), MIN_PRICE, MAX_PRICE); const close = clamp(open * Math.exp((company.drift / 100) / 252 + gaussian(state) * dailyVol), MIN_PRICE, MAX_PRICE); const span = Math.max(Math.abs(close - open), open * dailyVol * (0.25 + random01(state) * 0.75)); const high = clamp(Math.max(open, close) + span * (0.2 + random01(state)), MIN_PRICE, MAX_PRICE); const low = clamp(Math.min(open, close) - span * (0.2 + random01(state)), MIN_PRICE, MAX_PRICE); candles.push({ day: index + 1, date: dates[index], open, high: Math.max(open, close, high), low: Math.max(MIN_PRICE, Math.min(open, close, low)), close, volume: generatedVolume(state, company, open, close) }); previousClose = close; } const finalClose = candles[candles.length - 1].close; const scale = START_PRICE / finalClose; for (const candle of candles) { candle.open = clamp(candle.open * scale, MIN_PRICE, MAX_PRICE); candle.high = clamp(candle.high * scale, MIN_PRICE, MAX_PRICE); candle.low = clamp(candle.low * scale, MIN_PRICE, MAX_PRICE); candle.close = clamp(candle.close * scale, MIN_PRICE, MAX_PRICE); candle.high = Math.max(candle.open, candle.close, candle.high); candle.low = Math.max(MIN_PRICE, Math.min(candle.open, candle.close, candle.low)); } const last = candles[candles.length - 1]; last.close = START_PRICE; last.high = Math.max(last.high, START_PRICE); last.low = Math.min(last.low, START_PRICE); company.candles = candles; company.price = START_PRICE; company.metricBasePrice = START_PRICE; state.day = last.day; state.currentDate = last.date; }
+  function createDefaultState(seed, anchorDate) { const state = { schemaVersion: SCHEMA_VERSION, rngState: (seed >>> 0) || randomUint32(), sequence: 0, day: 1, currentDate: '', calendarMode: 'weekdays', marketMood: 0, marketVolatility: 100, cash: 1000000, initialCash: 1000000, realizedProfit: 0, allowNegativeCash: false, allowShort: false, tradeFeePercent: 0, selectedCompanyId: COMPANY_ID, positions: Object.create(null), trades: [], companies: [] }; const company = normalizeCompanyInput({ name: 'テスト企業', ticker: 'TEST', price: START_PRICE, marketCap: 10000, per: 15, volatility: 30, drift: 5, sensitivity: 1, logicMode: 'free' }); Object.assign(company, { id: COMPANY_ID, metricBasePrice: START_PRICE, metricBaseMarketCap: company.marketCap, metricBasePer: company.per, pendingShock: 0, lastChange: 0, candles: [] }); state.companies.push(company); generateHistory(state, company, anchorDate || todayIso(), HISTORY_YEARS); updateLastChange(company); return state; }
   function currentCompany(state) { return state && Array.isArray(state.companies) ? state.companies[0] || null : null; }
-  function updateLastChange(company) {
-    const candles = company.candles; const last = candles[candles.length - 1]; const previous = candles.length > 1 ? candles[candles.length - 2] : null;
-    const base = previous ? previous.close : last.open; company.lastChange = base > 0 ? ((last.close / base) - 1) * 100 : 0;
-  }
-  function syncLinkedMetrics(company) {
-    if (company.logicMode !== 'linked' || company.metricBasePrice <= 0) return;
-    const ratio = company.price / company.metricBasePrice;
-    company.marketCap = clamp(company.metricBaseMarketCap * ratio, 0, 1e12);
-    company.per = clamp(company.metricBasePer * ratio, -10000, 10000);
-  }
-  function setCurrentPrice(state, value) {
-    const company = currentCompany(state); if (!company) return null;
-    const price = clamp(finiteNumber(value, company.price), MIN_PRICE, MAX_PRICE); const last = company.candles[company.candles.length - 1];
-    company.price = price;
-    if (last) { last.close = price; last.high = Math.max(last.open, last.high, price); last.low = Math.max(MIN_PRICE, Math.min(last.open, last.low, price)); }
-    updateLastChange(company); syncLinkedMetrics(company); return company;
-  }
-  function adjustCurrentPrice(state, percent) {
-    const company = currentCompany(state); if (!company) return null;
-    const safePercent = clamp(finiteNumber(percent, 0), -99.99, 100000); return setCurrentPrice(state, company.price * (1 + safePercent / 100));
-  }
-  function updateCompany(state, input) {
-    const company = currentCompany(state); if (!company) return { ok: false, message: 'テスト企業が見つかりません。' };
-    const source = input && typeof input === 'object' ? input : {};
-    if (Object.prototype.hasOwnProperty.call(source, 'name')) company.name = cleanDisplayText(source.name, 'テスト企業', 40);
-    if (Object.prototype.hasOwnProperty.call(source, 'ticker')) company.ticker = String(source.ticker || 'TEST').trim().toUpperCase().replace(/[^A-Z0-9._-]/g, '').slice(0, 10) || 'TEST';
-    if (Object.prototype.hasOwnProperty.call(source, 'marketCap')) { company.marketCap = clamp(finiteNumber(source.marketCap, company.marketCap), 0, 1e12); company.metricBaseMarketCap = company.marketCap; company.metricBasePrice = company.price; }
-    if (Object.prototype.hasOwnProperty.call(source, 'per')) { company.per = clamp(finiteNumber(source.per, company.per), -10000, 10000); company.metricBasePer = company.per; company.metricBasePrice = company.price; }
-    if (Object.prototype.hasOwnProperty.call(source, 'volatility')) company.volatility = clamp(finiteNumber(source.volatility, company.volatility), 0, 500);
-    if (Object.prototype.hasOwnProperty.call(source, 'drift')) company.drift = clamp(finiteNumber(source.drift, company.drift), -500, 500);
-    if (Object.prototype.hasOwnProperty.call(source, 'sensitivity')) company.sensitivity = clamp(finiteNumber(source.sensitivity, company.sensitivity), 0, 10);
-    if (Object.prototype.hasOwnProperty.call(source, 'logicMode')) { company.logicMode = source.logicMode === 'linked' ? 'linked' : 'free'; company.metricBasePrice = company.price; company.metricBaseMarketCap = company.marketCap; company.metricBasePer = company.per; }
-    if (Object.prototype.hasOwnProperty.call(source, 'price')) setCurrentPrice(state, source.price);
-    return { ok: true, company };
-  }
-  function stepCompany(state, company) {
-    const previous = company.candles[company.candles.length - 1]; const previousClose = previous ? previous.close : company.price;
-    const dailyVol = (company.volatility / 100) / Math.sqrt(252); const dailyDrift = (company.drift / 100) / 252;
-    const moodEffect = (state.marketMood / 100) * 0.0012; const noise = gaussian(state) * dailyVol;
-    const rareShock = random01(state) < 0.012 ? gaussian(state) * dailyVol * 3.5 * Math.max(0.25, company.sensitivity) : 0;
-    const directedShock = clamp(company.pendingShock / 100, -0.95, 10) * company.sensitivity; company.pendingShock = 0;
-    const gap = gaussian(state) * dailyVol * 0.18; const open = clamp(previousClose * Math.exp(gap), MIN_PRICE, MAX_PRICE);
-    const rawReturn = dailyDrift + moodEffect + noise + rareShock + directedShock; const close = clamp(open * Math.exp(clamp(rawReturn, -3, 3)), MIN_PRICE, MAX_PRICE);
-    const span = Math.max(Math.abs(close - open), open * dailyVol * (0.25 + random01(state) * 0.75));
-    const high = clamp(Math.max(open, close) + span * (0.25 + random01(state)), MIN_PRICE, MAX_PRICE);
-    const low = clamp(Math.min(open, close) - span * (0.25 + random01(state)), MIN_PRICE, MAX_PRICE);
-    company.price = close;
-    company.candles.push({ day: state.day, date: state.currentDate, open, high: Math.max(open, close, high), low: Math.max(MIN_PRICE, Math.min(open, close, low)), close });
-    if (company.candles.length > MAX_CANDLES) company.candles.splice(0, company.candles.length - MAX_CANDLES);
-    updateLastChange(company); syncLinkedMetrics(company);
-  }
-  function stepOneDay(state) {
-    state.day += 1; state.currentDate = nextMarketDate(state.currentDate, state.calendarMode);
-    const company = currentCompany(state); if (company) stepCompany(state, company);
-  }
-  function stepMarket(state, days) {
-    const safeDays = clamp(Math.floor(finiteNumber(days, 1)), 1, 200);
-    for (let index = 0; index < safeDays; index += 1) stepOneDay(state);
-  }
-  function injectShock(state, percent) {
-    const company = currentCompany(state); if (!company) return false;
-    const safePercent = clamp(finiteNumber(percent, 0), -95, 1000); company.pendingShock = clamp(company.pendingShock + safePercent, -95, 1000); return true;
-  }
-  function ensurePosition(state) {
-    if (!state.positions || typeof state.positions !== 'object') state.positions = Object.create(null);
-    if (!state.positions[COMPANY_ID]) state.positions[COMPANY_ID] = { quantity: 0, averagePrice: 0 };
-    return state.positions[COMPANY_ID];
-  }
-  function executeTrade(state, side, quantity) {
-    const company = currentCompany(state); if (!company) return { ok: false, message: 'テスト企業が見つかりません。' };
-    const qty = Math.floor(clamp(finiteNumber(quantity, 0), 0, MAX_TRADE_QUANTITY)); if (qty <= 0) return { ok: false, message: '株数は1以上にしてください。' };
-    if (side !== 'buy' && side !== 'sell') return { ok: false, message: '売買方向が不正です。' };
-    const price = clamp(finiteNumber(company.price, MIN_PRICE), MIN_PRICE, MAX_PRICE); const feeRate = clamp(finiteNumber(state.tradeFeePercent, 0), 0, 10) / 100;
-    const gross = price * qty; const fee = gross * feeRate; if (!Number.isFinite(gross) || !Number.isFinite(fee)) return { ok: false, message: '取引金額が大きすぎます。' };
-    const position = ensurePosition(state); const oldQty = clamp(finiteNumber(position.quantity, 0), -MAX_POSITION, MAX_POSITION); const oldAverage = clamp(finiteNumber(position.averagePrice, 0), 0, MAX_PRICE);
-    const delta = side === 'buy' ? qty : -qty; const newQty = oldQty + delta; if (!Number.isFinite(newQty) || Math.abs(newQty) > MAX_POSITION) return { ok: false, message: '保有数の安全上限を超えます。' };
-    if (side === 'buy' && !state.allowNegativeCash && state.cash < gross + fee) return { ok: false, message: '現金が足りません。株数を減らしてください。' };
-    if (side === 'sell' && !state.allowShort && oldQty < qty) return { ok: false, message: '持っている株数を超えて売る場合は「空売り」を有効にしてください。' };
-    let realized = 0; let newAverage = oldAverage;
-    if (oldQty === 0 || Math.sign(oldQty) === Math.sign(delta)) {
-      const oldNotional = Math.abs(oldQty) * oldAverage; const addedNotional = Math.abs(delta) * price; newAverage = (oldNotional + addedNotional) / Math.max(1, Math.abs(newQty));
-    } else {
-      const closingQty = Math.min(Math.abs(oldQty), Math.abs(delta)); realized = oldQty > 0 ? (price - oldAverage) * closingQty : (oldAverage - price) * closingQty;
-      if (newQty === 0) newAverage = 0; else if (Math.sign(newQty) !== Math.sign(oldQty)) newAverage = price;
-    }
-    const cashDelta = side === 'buy' ? -(gross + fee) : gross - fee; const nextCash = finiteNumber(state.cash, 0) + cashDelta; const nextRealized = finiteNumber(state.realizedProfit, 0) + realized - fee;
-    if (![nextCash, nextRealized, newAverage].every(Number.isFinite) || Math.abs(nextCash) > MAX_ACCOUNT_VALUE || Math.abs(nextRealized) > MAX_ACCOUNT_VALUE) return { ok: false, message: '口座の数値が安全上限を超えます。' };
-    position.quantity = newQty; position.averagePrice = newQty === 0 ? 0 : newAverage; state.cash = nextCash; state.realizedProfit = nextRealized;
-    const trade = { id: 'trade-' + state.day + '-' + (state.sequence += 1), day: state.day, date: state.currentDate, companyId: COMPANY_ID, companyName: company.name, ticker: company.ticker, side, quantity: qty, price, fee, realized };
-    state.trades.unshift(trade); if (state.trades.length > MAX_TRADES) state.trades.length = MAX_TRADES; return { ok: true, trade };
-  }
-  function portfolioValue(state) {
-    const company = currentCompany(state); const position = state.positions && state.positions[COMPANY_ID] ? state.positions[COMPANY_ID] : { quantity: 0, averagePrice: 0 };
-    const marketValue = company ? position.quantity * company.price : 0;
-    const unrealized = !company || !position.quantity ? 0 : position.quantity > 0 ? (company.price - position.averagePrice) * position.quantity : (position.averagePrice - company.price) * Math.abs(position.quantity);
-    const total = state.cash + marketValue; return { cash: state.cash, marketValue, total, profit: total - state.initialCash, realized: state.realizedProfit, unrealized };
-  }
-  function weekKey(dateText) {
-    const date = parseIsoDate(dateText); if (!date) return dateText;
-    const day = date.getDay() || 7; date.setDate(date.getDate() - day + 1); return toIsoDate(date);
-  }
-  function monthKey(dateText) { return String(dateText).slice(0, 7); }
-  function aggregateCandles(candles, timeframe) {
-    const source = Array.isArray(candles) ? candles : [];
-    if (timeframe === '1d') return source.map((item) => ({ ...item, startDate: item.date, endDate: item.date, sourceCount: 1 }));
-    const keyFor = timeframe === '1m' ? monthKey : weekKey; const groups = [];
-    for (const candle of source) {
-      const key = keyFor(candle.date); let group = groups[groups.length - 1];
-      if (!group || group.key !== key) {
-        group = { key, day: candle.day, date: candle.date, startDate: candle.date, endDate: candle.date, open: candle.open, high: candle.high, low: candle.low, close: candle.close, sourceCount: 1 };
-        groups.push(group);
-      } else {
-        group.day = candle.day; group.date = candle.date; group.endDate = candle.date; group.high = Math.max(group.high, candle.high); group.low = Math.min(group.low, candle.low); group.close = candle.close; group.sourceCount += 1;
-      }
-    }
-    return groups.map(({ key, ...group }) => group);
-  }
-  function rangeStartDate(endDateText, range) {
-    if (range === 'all') return '';
-    const date = parseIsoDate(endDateText); if (!date) return '';
-    if (range === '1m') date.setMonth(date.getMonth() - 1);
-    else if (range === '3m') date.setMonth(date.getMonth() - 3);
-    else if (range === '1y') date.setFullYear(date.getFullYear() - 1);
-    else return '';
-    return toIsoDate(date);
-  }
-  function candlesForView(candles, timeframe, range, currentDate) {
-    const start = rangeStartDate(currentDate, range); const filtered = start ? candles.filter((candle) => candle.date >= start) : candles.slice();
-    return aggregateCandles(filtered, timeframe);
-  }
+  function updateLastChange(company) { const candles = company.candles; const last = candles[candles.length - 1]; const previous = candles.length > 1 ? candles[candles.length - 2] : null; if (!last) { company.lastChange = 0; return; } const base = previous ? previous.close : last.open; company.lastChange = base > 0 ? ((last.close / base) - 1) * 100 : 0; }
+  function syncLinkedMetrics(company) { if (company.logicMode !== 'linked' || company.metricBasePrice <= 0) return; const ratio = company.price / company.metricBasePrice; company.marketCap = clamp(company.metricBaseMarketCap * ratio, 0, 1e12); company.per = clamp(company.metricBasePer * ratio, -10000, 10000); }
+  function setCurrentPrice(state, value) { const company = currentCompany(state); if (!company) return null; const price = clamp(finiteNumber(value, company.price), MIN_PRICE, MAX_PRICE); const last = company.candles[company.candles.length - 1]; company.price = price; if (last) { last.close = price; last.high = Math.max(last.open, last.high, price); last.low = Math.max(MIN_PRICE, Math.min(last.open, last.low, price)); last.volume = Math.floor(clamp(finiteNumber(last.volume, 100000) * 1.002, 1000, MAX_VOLUME)); } updateLastChange(company); syncLinkedMetrics(company); return company; }
+  function adjustCurrentPrice(state, percent) { const company = currentCompany(state); if (!company) return null; const safePercent = clamp(finiteNumber(percent, 0), -99.99, 100000); return setCurrentPrice(state, company.price * (1 + safePercent / 100)); }
+  function applyFictionEvent(state, percent) { const company = currentCompany(state); if (!company) return null; const result = adjustCurrentPrice(state, percent); const last = company.candles[company.candles.length - 1]; if (last) last.volume = Math.floor(clamp(last.volume * (2 + Math.min(8, Math.abs(percent) / 30)), 1000, MAX_VOLUME)); return result; }
+  function updateCompany(state, input) { const company = currentCompany(state); if (!company) return { ok: false, message: 'テスト企業が見つかりません。' }; const source = input && typeof input === 'object' ? input : {}; if (Object.prototype.hasOwnProperty.call(source, 'name')) company.name = cleanDisplayText(source.name, 'テスト企業', 40); if (Object.prototype.hasOwnProperty.call(source, 'ticker')) company.ticker = String(source.ticker || 'TEST').trim().toUpperCase().replace(/[^A-Z0-9._-]/g, '').slice(0, 10) || 'TEST'; if (Object.prototype.hasOwnProperty.call(source, 'marketCap')) { company.marketCap = clamp(finiteNumber(source.marketCap, company.marketCap), 0, 1e12); company.metricBaseMarketCap = company.marketCap; company.metricBasePrice = company.price; } if (Object.prototype.hasOwnProperty.call(source, 'per')) { company.per = clamp(finiteNumber(source.per, company.per), -10000, 10000); company.metricBasePer = company.per; company.metricBasePrice = company.price; } if (Object.prototype.hasOwnProperty.call(source, 'volatility')) company.volatility = clamp(finiteNumber(source.volatility, company.volatility), 0, 500); if (Object.prototype.hasOwnProperty.call(source, 'drift')) company.drift = clamp(finiteNumber(source.drift, company.drift), -500, 500); if (Object.prototype.hasOwnProperty.call(source, 'sensitivity')) company.sensitivity = clamp(finiteNumber(source.sensitivity, company.sensitivity), 0, 10); if (Object.prototype.hasOwnProperty.call(source, 'logicMode')) { company.logicMode = source.logicMode === 'linked' ? 'linked' : 'free'; company.metricBasePrice = company.price; company.metricBaseMarketCap = company.marketCap; company.metricBasePer = company.per; } if (Object.prototype.hasOwnProperty.call(source, 'price')) setCurrentPrice(state, source.price); return { ok: true, company }; }
+  function stepCompany(state, company) { const previous = company.candles[company.candles.length - 1]; const previousClose = previous ? previous.close : company.price; const dailyVol = (company.volatility / 100) / Math.sqrt(252); const dailyDrift = (company.drift / 100) / 252; const moodEffect = (state.marketMood / 100) * 0.0012; const noise = gaussian(state) * dailyVol; const rareShock = random01(state) < 0.012 ? gaussian(state) * dailyVol * 3.5 * Math.max(0.25, company.sensitivity) : 0; const directedShock = clamp(company.pendingShock / 100, -0.95, 10) * company.sensitivity; company.pendingShock = 0; const gap = gaussian(state) * dailyVol * 0.18; const open = clamp(previousClose * Math.exp(gap), MIN_PRICE, MAX_PRICE); const rawReturn = dailyDrift + moodEffect + noise + rareShock + directedShock; const close = clamp(open * Math.exp(clamp(rawReturn, -3, 3)), MIN_PRICE, MAX_PRICE); const span = Math.max(Math.abs(close - open), open * dailyVol * (0.25 + random01(state) * 0.75)); const high = clamp(Math.max(open, close) + span * (0.25 + random01(state)), MIN_PRICE, MAX_PRICE); const low = clamp(Math.min(open, close) - span * (0.25 + random01(state)), MIN_PRICE, MAX_PRICE); company.price = close; company.candles.push({ day: state.day, date: state.currentDate, open, high: Math.max(open, close, high), low: Math.max(MIN_PRICE, Math.min(open, close, low)), close, volume: generatedVolume(state, company, open, close) }); if (company.candles.length > MAX_CANDLES) company.candles.splice(0, company.candles.length - MAX_CANDLES); updateLastChange(company); syncLinkedMetrics(company); }
+  function stepOneDay(state) { state.day += 1; state.currentDate = nextMarketDate(state.currentDate, state.calendarMode); const company = currentCompany(state); if (company) stepCompany(state, company); }
+  function stepMarket(state, days) { const safeDays = clamp(Math.floor(finiteNumber(days, 1)), 1, 200); for (let index = 0; index < safeDays; index += 1) stepOneDay(state); }
+  function injectShock(state, percent) { const company = currentCompany(state); if (!company) return false; const safePercent = clamp(finiteNumber(percent, 0), -95, 1000); company.pendingShock = clamp(company.pendingShock + safePercent, -95, 1000); return true; }
+  function ensurePosition(state) { if (!state.positions || typeof state.positions !== 'object') state.positions = Object.create(null); if (!state.positions[COMPANY_ID]) state.positions[COMPANY_ID] = { quantity: 0, averagePrice: 0 }; return state.positions[COMPANY_ID]; }
+  function executeTrade(state, side, quantity) { const company = currentCompany(state); if (!company) return { ok: false, message: 'テスト企業が見つかりません。' }; const qty = Math.floor(clamp(finiteNumber(quantity, 0), 0, MAX_TRADE_QUANTITY)); if (qty <= 0) return { ok: false, message: '株数は1以上にしてください。' }; if (side !== 'buy' && side !== 'sell') return { ok: false, message: '売買方向が不正です。' }; const price = clamp(finiteNumber(company.price, MIN_PRICE), MIN_PRICE, MAX_PRICE); const feeRate = clamp(finiteNumber(state.tradeFeePercent, 0), 0, 10) / 100; const gross = price * qty; const fee = gross * feeRate; if (!Number.isFinite(gross) || !Number.isFinite(fee)) return { ok: false, message: '取引金額が大きすぎます。' }; const position = ensurePosition(state); const oldQty = clamp(finiteNumber(position.quantity, 0), -MAX_POSITION, MAX_POSITION); const oldAverage = clamp(finiteNumber(position.averagePrice, 0), 0, MAX_PRICE); const delta = side === 'buy' ? qty : -qty; const newQty = oldQty + delta; if (!Number.isFinite(newQty) || Math.abs(newQty) > MAX_POSITION) return { ok: false, message: '保有数の安全上限を超えます。' }; if (side === 'buy' && !state.allowNegativeCash && state.cash < gross + fee) return { ok: false, message: '現金が足りません。株数を減らしてください。' }; if (side === 'sell' && !state.allowShort && oldQty < qty) return { ok: false, message: '持っている株数を超えて売る場合は「空売り」を有効にしてください。' }; let realized = 0; let newAverage = oldAverage; if (oldQty === 0 || Math.sign(oldQty) === Math.sign(delta)) { const oldNotional = Math.abs(oldQty) * oldAverage; const addedNotional = Math.abs(delta) * price; newAverage = (oldNotional + addedNotional) / Math.max(1, Math.abs(newQty)); } else { const closingQty = Math.min(Math.abs(oldQty), Math.abs(delta)); realized = oldQty > 0 ? (price - oldAverage) * closingQty : (oldAverage - price) * closingQty; if (newQty === 0) newAverage = 0; else if (Math.sign(newQty) !== Math.sign(oldQty)) newAverage = price; } const cashDelta = side === 'buy' ? -(gross + fee) : gross - fee; const nextCash = finiteNumber(state.cash, 0) + cashDelta; const nextRealized = finiteNumber(state.realizedProfit, 0) + realized - fee; if (![nextCash, nextRealized, newAverage].every(Number.isFinite) || Math.abs(nextCash) > MAX_ACCOUNT_VALUE || Math.abs(nextRealized) > MAX_ACCOUNT_VALUE) return { ok: false, message: '口座の数値が安全上限を超えます。' }; position.quantity = newQty; position.averagePrice = newQty === 0 ? 0 : newAverage; state.cash = nextCash; state.realizedProfit = nextRealized; const trade = { id: 'trade-' + state.day + '-' + (state.sequence += 1), day: state.day, date: state.currentDate, companyId: COMPANY_ID, companyName: company.name, ticker: company.ticker, side, quantity: qty, price, fee, realized }; state.trades.unshift(trade); if (state.trades.length > MAX_TRADES) state.trades.length = MAX_TRADES; return { ok: true, trade }; }
+  function portfolioValue(state) { const company = currentCompany(state); const position = state.positions && state.positions[COMPANY_ID] ? state.positions[COMPANY_ID] : { quantity: 0, averagePrice: 0 }; const marketValue = company ? position.quantity * company.price : 0; const unrealized = !company || !position.quantity ? 0 : position.quantity > 0 ? (company.price - position.averagePrice) * position.quantity : (position.averagePrice - company.price) * Math.abs(position.quantity); const total = state.cash + marketValue; return { cash: state.cash, marketValue, total, profit: total - state.initialCash, realized: state.realizedProfit, unrealized }; }
+  function weekKey(value) { const date = parseIsoDate(value); if (!date) return value; const weekday = (date.getDay() + 6) % 7; date.setDate(date.getDate() - weekday); return toIsoDate(date); }
+  function aggregateCandles(candles, timeframe) { const source = Array.isArray(candles) ? candles : []; if (timeframe === '1d') return source.map((candle) => ({ day: candle.day, date: candle.date, startDate: candle.date, endDate: candle.date, open: candle.open, high: candle.high, low: candle.low, close: candle.close, volume: finiteNumber(candle.volume, 0) })); const groups = []; let current = null; for (const candle of source) { const key = timeframe === '1w' ? weekKey(candle.date) : candle.date.slice(0, 7); if (!current || current.key !== key) { current = { key, day: candle.day, date: candle.date, startDate: candle.date, endDate: candle.date, open: candle.open, high: candle.high, low: candle.low, close: candle.close, volume: finiteNumber(candle.volume, 0) }; groups.push(current); } else { current.endDate = candle.date; current.date = candle.date; current.day = candle.day; current.high = Math.max(current.high, candle.high); current.low = Math.min(current.low, candle.low); current.close = candle.close; current.volume = clamp(current.volume + finiteNumber(candle.volume, 0), 0, MAX_VOLUME); } } return groups.map(({ key, ...item }) => item); }
+  function rangeStartDate(currentDate, range) { if (range === '1m') return shiftDateByMonths(currentDate, -1); if (range === '3m') return shiftDateByMonths(currentDate, -3); if (range === '1y') return shiftDateByYears(currentDate, -1); if (range === '5y') return shiftDateByYears(currentDate, -5); if (range === '20y') return shiftDateByYears(currentDate, -20); return ''; }
+  function filterCandlesByRange(candles, range, currentDate) { if (!Array.isArray(candles)) return []; const start = rangeStartDate(currentDate, range); if (!start) return candles.slice(); return candles.filter((candle) => (candle.endDate || candle.date) >= start); }
+  function marketStats(company, currentDate) { const candles = company && Array.isArray(company.candles) ? company.candles : []; if (!candles.length) return { high52: 0, low52: 0, highAll: 0, lowAll: 0, volume: 0 }; const start52 = shiftDateByYears(currentDate, -1); const recent = candles.filter((candle) => candle.date >= start52); return { high52: Math.max(...recent.map((candle) => candle.high)), low52: Math.min(...recent.map((candle) => candle.low)), highAll: Math.max(...candles.map((candle) => candle.high)), lowAll: Math.min(...candles.map((candle) => candle.low)), volume: candles[candles.length - 1].volume }; }
 
-  root.Engine = {
-    SCHEMA_VERSION, COMPANY_ID, MAX_COMPANIES, MAX_CANDLES, MAX_TRADES, MAX_TRADE_QUANTITY, MAX_POSITION, MAX_ACCOUNT_VALUE, MIN_PRICE, MAX_PRICE, START_PRICE,
-    clamp, finiteNumber, cleanDisplayText, parseIsoDate, toIsoDate, todayIso, normalizeAnchorDate, nextMarketDate, previousMarketDate, tradingDatesEnding,
-    normalizeCompanyInput, createDefaultState, currentCompany, setCurrentPrice, adjustCurrentPrice, updateCompany, stepMarket, injectShock, executeTrade, portfolioValue,
-    aggregateCandles, rangeStartDate, candlesForView
-  };
+  root.Engine = { SCHEMA_VERSION, COMPANY_ID, MAX_COMPANIES, MAX_CANDLES, MAX_TRADES, MAX_TRADE_QUANTITY, MAX_POSITION, MAX_ACCOUNT_VALUE, MAX_VOLUME, MIN_PRICE, MAX_PRICE, START_PRICE, HISTORY_YEARS, clamp, finiteNumber, cleanDisplayText, parseIsoDate, toIsoDate, todayIso, isMarketOpenDate, normalizeAnchorDate, nextMarketDate, previousMarketDate, marketDatesForYearsEnding, tradingDatesEnding, normalizeCompanyInput, createDefaultState, currentCompany, setCurrentPrice, adjustCurrentPrice, applyFictionEvent, updateCompany, stepMarket, injectShock, executeTrade, portfolioValue, aggregateCandles, filterCandlesByRange, marketStats };
 }());
