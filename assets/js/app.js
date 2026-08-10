@@ -1,45 +1,18 @@
 (function () {
   'use strict';
-
-  const root = window.StockSandbox; const engine = root && root.Engine; const storage = root && root.Storage;
-  if (!engine || !storage || !root.Chart) return;
+  const root = window.StockSandbox; const engine = root && root.Engine; const storage = root && root.Storage; if (!engine || !storage || !root.Chart) return;
   const $ = (id) => document.getElementById(id);
-  const elements = {
-    saveStatus: $('save-status'), dayLabel: $('day-label'), marketDate: $('market-date'), companyName: $('company-name'), companyTicker: $('company-ticker'),
-    companyNameDisplay: $('company-name-display'), currentPrice: $('current-price'), priceChange: $('price-change'), marketChart: $('market-chart'), priceDragHandle: $('price-drag-handle'),
-    priceSlider: $('price-slider'), priceNumber: $('price-number'), marketCapSlider: $('market-cap-slider'), marketCapNumber: $('market-cap-number'), perSlider: $('per-slider'), perNumber: $('per-number'),
-    volatilitySlider: $('volatility-slider'), volatilityNumber: $('volatility-number'), driftSlider: $('drift-slider'), driftNumber: $('drift-number'), moodSlider: $('mood-slider'), moodNumber: $('mood-number'),
-    logicMode: $('logic-mode'), sensitivityNumber: $('sensitivity-number'), calendarMode: $('calendar-mode'), calendarNote: $('calendar-note'), quickPriceButtons: document.querySelectorAll('.quick-price'),
-    timeframeButtons: document.querySelectorAll('.timeframe-button'), rangeButtons: document.querySelectorAll('.range-button'),
-    detailPeriod: $('detail-period'), detailDate: $('detail-date'), detailOpen: $('detail-open'), detailHigh: $('detail-high'), detailLow: $('detail-low'), detailClose: $('detail-close'), detailRange: $('detail-range'),
-    step1: $('step-1'), step5: $('step-5'), step20: $('step-20'), togglePlay: $('toggle-play'), playSpeed: $('play-speed'), chartOlder: $('chart-older'), chartNewer: $('chart-newer'), chartZoomIn: $('chart-zoom-in'), chartZoomOut: $('chart-zoom-out'), chartReset: $('chart-reset'),
-    portfolioTotal: $('portfolio-total'), portfolioCash: $('portfolio-cash'), positionQty: $('position-qty'), portfolioProfit: $('portfolio-profit'), averagePrice: $('average-price'),
-    tradeQuantity: $('trade-quantity'), quantityButtons: document.querySelectorAll('.quantity-preset'), buyButton: $('buy-button'), sellButton: $('sell-button'), allowNegativeCash: $('allow-negative-cash'), allowShort: $('allow-short'), tradeFee: $('trade-fee'), tradeMessage: $('trade-message'), tradeLog: $('trade-log'),
-    undoAction: $('undo-action'), resetData: $('reset-data'), exportData: $('export-data'), importData: $('import-data'), dataMessage: $('data-message')
-  };
-
-  let state; let playTimer = null; let saveTimer = null; let lastUndoGroup = ''; let lastUndoAt = 0;
-  let timeframe = '1d'; let range = '3m'; let selectedBar = null; let priceDrag = null;
-  const undoStack = [];
-  const chart = new root.Chart.CandlestickChart(elements.marketChart, { onSelect: (bar) => { selectedBar = bar; renderDetail(); } });
-
-  function snapshot() { return JSON.parse(JSON.stringify(state)); }
-  function pushUndo(value) { if (!value) return; undoStack.push(value); if (undoStack.length > 20) undoStack.shift(); elements.undoAction.disabled = undoStack.length === 0; }
-  function rememberDiscrete() { pushUndo(snapshot()); lastUndoGroup = ''; lastUndoAt = 0; }
-  function rememberContinuous(group) { const now = Date.now(); if (group !== lastUndoGroup || now - lastUndoAt > 650) { pushUndo(snapshot()); lastUndoGroup = group; } lastUndoAt = now; }
+  const elements = { saveStatus: $('save-status'), marketDate: $('market-date'), dayLabel: $('day-label'), companyName: $('company-name'), companyTicker: $('company-ticker'), companyNameDisplay: $('company-name-display'), currentPrice: $('current-price'), priceChange: $('price-change'), marketChart: $('market-chart'), priceDragHandle: $('price-drag-handle'), priceSlider: $('price-slider'), priceNumber: $('price-number'), marketCapSlider: $('market-cap-slider'), marketCapNumber: $('market-cap-number'), perSlider: $('per-slider'), perNumber: $('per-number'), volatilitySlider: $('volatility-slider'), volatilityNumber: $('volatility-number'), driftSlider: $('drift-slider'), driftNumber: $('drift-number'), moodSlider: $('mood-slider'), moodNumber: $('mood-number'), logicMode: $('logic-mode'), sensitivityNumber: $('sensitivity-number'), calendarMode: $('calendar-mode'), quickPriceButtons: document.querySelectorAll('.quick-price'), fictionEventButtons: document.querySelectorAll('.fiction-event'), step1: $('step-1'), step5: $('step-5'), step20: $('step-20'), togglePlay: $('toggle-play'), playSpeed: $('play-speed'), chartOlder: $('chart-older'), chartNewer: $('chart-newer'), chartZoomIn: $('chart-zoom-in'), chartZoomOut: $('chart-zoom-out'), chartReset: $('chart-reset'), chartFit: $('chart-fit'), timeframeButtons: document.querySelectorAll('.timeframe-button'), rangeButtons: document.querySelectorAll('.range-button'), detailPeriod: $('detail-period'), detailDate: $('detail-date'), detailOpen: $('detail-open'), detailHigh: $('detail-high'), detailLow: $('detail-low'), detailClose: $('detail-close'), detailChange: $('detail-change'), detailRange: $('detail-range'), detailVolume: $('detail-volume'), stat52High: $('stat-52-high'), stat52Low: $('stat-52-low'), stat20High: $('stat-20-high'), stat20Low: $('stat-20-low'), statVolume: $('stat-volume'), statMarketCap: $('stat-market-cap'), statPer: $('stat-per'), portfolioTotal: $('portfolio-total'), portfolioCash: $('portfolio-cash'), positionQty: $('position-qty'), portfolioProfit: $('portfolio-profit'), averagePrice: $('average-price'), tradeQuantity: $('trade-quantity'), quantityButtons: document.querySelectorAll('.quantity-preset'), buyButton: $('buy-button'), sellButton: $('sell-button'), allowNegativeCash: $('allow-negative-cash'), allowShort: $('allow-short'), tradeFee: $('trade-fee'), tradeMessage: $('trade-message'), tradeLog: $('trade-log'), undoAction: $('undo-action'), resetData: $('reset-data'), exportData: $('export-data'), importData: $('import-data'), dataMessage: $('data-message'), eventMessage: $('event-message') };
+  let state; let playTimer = null; let saveTimer = null; let lastUndoGroup = ''; let lastUndoAt = 0; let viewTimeframe = '1d'; let viewRange = '1y'; let lastChartModeKey = ''; const undoStack = []; const UNDO_LIMIT = 3;
+  const chart = new root.Chart.CandlestickChart(elements.marketChart, { onSelect: (candle) => renderCandleDetail(candle) });
+  function compactSnapshot() { const validated = storage.validateState(state); return JSON.stringify(storage.makeCompactSnapshot(validated, engine.MAX_CANDLES)); }
+  function pushUndo(value) { if (!value) return; undoStack.push(value); if (undoStack.length > UNDO_LIMIT) undoStack.shift(); elements.undoAction.disabled = undoStack.length === 0; }
+  function rememberDiscrete() { pushUndo(compactSnapshot()); lastUndoGroup = ''; lastUndoAt = 0; }
+  function rememberContinuous(group) { const now = Date.now(); if (group !== lastUndoGroup || now - lastUndoAt > 700) { pushUndo(compactSnapshot()); lastUndoGroup = group; } lastUndoAt = now; }
   function formatMoney(value) { if (!Number.isFinite(value)) return '-'; if (Math.abs(value) >= 1e15) return '¥' + value.toExponential(3); return new Intl.NumberFormat('ja-JP', { style: 'currency', currency: 'JPY', maximumFractionDigits: Math.abs(value) < 100 ? 2 : 0 }).format(value); }
   function formatNumber(value, digits) { if (!Number.isFinite(value)) return '-'; if (Math.abs(value) >= 1e12) return value.toExponential(3); return new Intl.NumberFormat('ja-JP', { maximumFractionDigits: digits, minimumFractionDigits: 0 }).format(value); }
-  function formatDate(value, includeYear) {
-    const date = engine.parseIsoDate(value); if (!date) return '-';
-    const weekdays = ['日', '月', '火', '水', '木', '金', '土'];
-    const body = includeYear ? date.getFullYear() + '年' + (date.getMonth() + 1) + '月' + date.getDate() + '日' : (date.getMonth() + 1) + '月' + date.getDate() + '日';
-    return body + ' (' + weekdays[date.getDay()] + ')';
-  }
-  function formatPeriod(bar) {
-    if (!bar) return '-';
-    if (bar.startDate && bar.endDate && bar.startDate !== bar.endDate) return formatDate(bar.startDate, true) + ' 〜 ' + formatDate(bar.endDate, false);
-    return formatDate(bar.date || bar.endDate, true);
-  }
+  function formatVolume(value) { if (!Number.isFinite(value)) return '-'; return new Intl.NumberFormat('ja-JP', { maximumFractionDigits: 0 }).format(value) + '株'; }
+  function formatDate(value) { const date = engine.parseIsoDate(value); if (!date) return value || '-'; return new Intl.DateTimeFormat('ja-JP', { year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'short' }).format(date); }
   function setSignedClass(element, value) { element.classList.remove('positive', 'negative'); if (value > 0) element.classList.add('positive'); if (value < 0) element.classList.add('negative'); }
   function announce(element, message, warning) { if (!element) return; element.textContent = message; element.classList.toggle('warning', Boolean(warning)); }
   function currentCompany() { return engine.currentCompany(state); }
@@ -48,69 +21,24 @@
   function sliderToPrice(value) { return engine.clamp(Math.pow(10, Number(value) / 100 - 2), engine.MIN_PRICE, engine.MAX_PRICE); }
   function marketCapToSlider(value) { if (!(value > 0)) return 0; return Math.round(engine.clamp(1 + Math.log10(Math.max(1, value)) * 100, 1, 1201)); }
   function sliderToMarketCap(value) { const number = Number(value); if (number <= 0) return 0; return engine.clamp(Math.pow(10, (number - 1) / 100), 0, 1e12); }
-  function persistNow() {
-    clearTimeout(saveTimer); saveTimer = null; if (!state) return;
-    const result = storage.saveState(state); elements.saveStatus.textContent = result.ok ? '自動保存済み' : '保存できません';
-    if (!result.ok) announce(elements.dataMessage, result.message || '保存できませんでした。', true);
-  }
-  function scheduleSave() { clearTimeout(saveTimer); elements.saveStatus.textContent = '保存待ち'; saveTimer = setTimeout(persistNow, 900); }
-  function renderIdentity() {
-    const company = currentCompany(); elements.companyNameDisplay.textContent = company.name; elements.currentPrice.textContent = formatMoney(company.price);
-    elements.priceChange.textContent = (company.lastChange >= 0 ? '+' : '') + formatNumber(company.lastChange, 2) + '%'; setSignedClass(elements.priceChange, company.lastChange);
-    elements.marketDate.textContent = formatDate(state.currentDate, true); elements.dayLabel.textContent = formatNumber(state.day, 0) + (state.calendarMode === 'weekdays' ? '営業日目' : '日目');
-    elements.priceDragHandle.setAttribute('aria-valuenow', String(company.price)); elements.priceDragHandle.setAttribute('aria-valuetext', formatMoney(company.price));
-  }
-  function renderControls() {
-    const company = currentCompany();
-    if (document.activeElement !== elements.companyName) elements.companyName.value = company.name; if (document.activeElement !== elements.companyTicker) elements.companyTicker.value = company.ticker;
-    elements.priceSlider.value = String(priceToSlider(company.price)); if (document.activeElement !== elements.priceNumber) elements.priceNumber.value = String(company.price);
-    elements.marketCapSlider.value = String(marketCapToSlider(company.marketCap)); if (document.activeElement !== elements.marketCapNumber) elements.marketCapNumber.value = String(company.marketCap);
-    elements.perSlider.value = String(engine.clamp(company.per, -100, 300)); if (document.activeElement !== elements.perNumber) elements.perNumber.value = String(company.per);
-    elements.volatilitySlider.value = String(engine.clamp(company.volatility, 0, 200)); if (document.activeElement !== elements.volatilityNumber) elements.volatilityNumber.value = String(company.volatility);
-    elements.driftSlider.value = String(engine.clamp(company.drift, -100, 100)); if (document.activeElement !== elements.driftNumber) elements.driftNumber.value = String(company.drift);
-    elements.moodSlider.value = String(state.marketMood); if (document.activeElement !== elements.moodNumber) elements.moodNumber.value = String(state.marketMood);
-    elements.logicMode.value = company.logicMode; if (document.activeElement !== elements.sensitivityNumber) elements.sensitivityNumber.value = String(company.sensitivity);
-    elements.calendarMode.value = state.calendarMode; elements.calendarNote.textContent = state.calendarMode === 'weekdays' ? '土日を飛ばして次の平日へ進みます。' : '土日も含めて1日ずつ進む365日市場です。';
-    elements.allowNegativeCash.checked = state.allowNegativeCash; elements.allowShort.checked = state.allowShort; if (document.activeElement !== elements.tradeFee) elements.tradeFee.value = String(state.tradeFeePercent);
-  }
-  function currentBars() { return engine.candlesForView(currentCompany().candles, timeframe, range, state.currentDate); }
-  function renderDetail() {
-    const bar = selectedBar || currentBars().slice(-1)[0]; if (!bar) return;
-    elements.detailPeriod.textContent = timeframe === '1d' ? '日足' : timeframe === '1w' ? '週足' : '月足'; elements.detailDate.textContent = formatPeriod(bar);
-    elements.detailOpen.textContent = formatMoney(bar.open); elements.detailHigh.textContent = formatMoney(bar.high); elements.detailLow.textContent = formatMoney(bar.low); elements.detailClose.textContent = formatMoney(bar.close); elements.detailRange.textContent = formatMoney(bar.high - bar.low);
-  }
-  function renderChart(selectLatest) {
-    const bars = currentBars(); chart.setData(bars, state.trades); if (selectLatest !== false) { selectedBar = bars[bars.length - 1] || null; chart.selectLatest(); } renderDetail();
-  }
-  function renderModeButtons() {
-    elements.timeframeButtons.forEach((button) => { const active = button.dataset.timeframe === timeframe; button.classList.toggle('active', active); button.setAttribute('aria-pressed', active ? 'true' : 'false'); });
-    elements.rangeButtons.forEach((button) => { const active = button.dataset.range === range; button.classList.toggle('active', active); button.setAttribute('aria-pressed', active ? 'true' : 'false'); });
-  }
-  function renderPortfolio() {
-    const portfolio = engine.portfolioValue(state); const position = currentPosition(); elements.portfolioTotal.textContent = formatMoney(portfolio.total); elements.portfolioCash.textContent = formatMoney(portfolio.cash);
-    elements.positionQty.textContent = formatNumber(position.quantity, 0) + '株'; elements.portfolioProfit.textContent = formatMoney(portfolio.profit); elements.averagePrice.textContent = position.quantity ? formatMoney(position.averagePrice) : '-'; setSignedClass(elements.portfolioProfit, portfolio.profit);
-  }
-  function renderTradeLog() {
-    const fragment = document.createDocumentFragment(); const recent = state.trades.slice(0, 12);
-    if (!recent.length) { const item = document.createElement('li'); item.textContent = 'まだ売買していません。'; fragment.appendChild(item); }
-    else for (const trade of recent) { const item = document.createElement('li'); item.textContent = formatDate(trade.date, false) + ' ' + (trade.side === 'buy' ? '買い' : '売り') + ' ' + formatNumber(trade.quantity, 0) + '株 @ ' + formatMoney(trade.price); fragment.appendChild(item); }
-    elements.tradeLog.replaceChildren(fragment);
-  }
-  function renderAll() { renderIdentity(); renderControls(); renderModeButtons(); renderChart(); renderPortfolio(); renderTradeLog(); elements.undoAction.disabled = undoStack.length === 0; }
-  function applyPrice(value, group) { rememberContinuous(group); engine.setCurrentPrice(state, value); renderIdentity(); renderControls(); renderChart(); renderPortfolio(); scheduleSave(); }
-  function updateCompanyField(field, value, group) { rememberContinuous(group); engine.updateCompany(state, { [field]: value }); renderIdentity(); renderControls(); renderChart(); renderPortfolio(); scheduleSave(); }
-  function advance(days, remember) { if (remember !== false) rememberDiscrete(); engine.stepMarket(state, days); chart.resetView(); renderAll(); scheduleSave(); }
-  function setPlaying(enabled) {
-    clearInterval(playTimer); playTimer = null; elements.togglePlay.setAttribute('aria-pressed', enabled ? 'true' : 'false'); elements.togglePlay.textContent = enabled ? '停止する' : '自動で進める';
-    if (!enabled) return; playTimer = setInterval(() => advance(1, false), Number(elements.playSpeed.value) || 800);
-  }
-  function applyTrade(side) {
-    const before = snapshot(); state.allowNegativeCash = elements.allowNegativeCash.checked; state.allowShort = elements.allowShort.checked; state.tradeFeePercent = engine.clamp(Number(elements.tradeFee.value) || 0, 0, 10);
-    const result = engine.executeTrade(state, side, elements.tradeQuantity.value);
-    if (!result.ok) { state = storage.validateState(before); announce(elements.tradeMessage, result.message, true); renderAll(); return; }
-    pushUndo(before); announce(elements.tradeMessage, (side === 'buy' ? '買いました。' : '売りました。') + formatNumber(result.trade.quantity, 0) + '株 @ ' + formatMoney(result.trade.price), false); renderAll(); scheduleSave();
-  }
-
+  function persistNow() { clearTimeout(saveTimer); saveTimer = null; if (!state) return; const result = storage.saveState(state); elements.saveStatus.textContent = result.ok ? '自動保存済み' : '保存できません'; if (!result.ok) announce(elements.dataMessage, result.message || '保存できませんでした。', true); }
+  function scheduleSave() { clearTimeout(saveTimer); elements.saveStatus.textContent = '保存待ち'; saveTimer = setTimeout(persistNow, 1000); }
+  function renderIdentity() { const company = currentCompany(); elements.companyNameDisplay.textContent = company.name; elements.currentPrice.textContent = formatMoney(company.price); elements.priceChange.textContent = (company.lastChange >= 0 ? '+' : '') + formatNumber(company.lastChange, 2) + '%'; setSignedClass(elements.priceChange, company.lastChange); elements.marketDate.textContent = formatDate(state.currentDate); elements.dayLabel.textContent = formatNumber(company.candles.length, 0) + '本の日足'; elements.priceDragHandle.setAttribute('aria-valuenow', String(company.price)); elements.priceDragHandle.setAttribute('aria-valuetext', formatMoney(company.price)); }
+  function renderControls() { const company = currentCompany(); if (document.activeElement !== elements.companyName) elements.companyName.value = company.name; if (document.activeElement !== elements.companyTicker) elements.companyTicker.value = company.ticker; elements.priceSlider.value = String(priceToSlider(company.price)); if (document.activeElement !== elements.priceNumber) elements.priceNumber.value = String(company.price); elements.marketCapSlider.value = String(marketCapToSlider(company.marketCap)); if (document.activeElement !== elements.marketCapNumber) elements.marketCapNumber.value = String(company.marketCap); elements.perSlider.value = String(engine.clamp(company.per, -100, 300)); if (document.activeElement !== elements.perNumber) elements.perNumber.value = String(company.per); elements.volatilitySlider.value = String(engine.clamp(company.volatility, 0, 200)); if (document.activeElement !== elements.volatilityNumber) elements.volatilityNumber.value = String(company.volatility); elements.driftSlider.value = String(engine.clamp(company.drift, -100, 100)); if (document.activeElement !== elements.driftNumber) elements.driftNumber.value = String(company.drift); elements.moodSlider.value = String(state.marketMood); if (document.activeElement !== elements.moodNumber) elements.moodNumber.value = String(state.marketMood); elements.logicMode.value = company.logicMode; if (document.activeElement !== elements.sensitivityNumber) elements.sensitivityNumber.value = String(company.sensitivity); elements.calendarMode.value = state.calendarMode; elements.allowNegativeCash.checked = state.allowNegativeCash; elements.allowShort.checked = state.allowShort; if (document.activeElement !== elements.tradeFee) elements.tradeFee.value = String(state.tradeFeePercent); elements.timeframeButtons.forEach((button) => { const active = button.dataset.timeframe === viewTimeframe; button.classList.toggle('active', active); button.setAttribute('aria-pressed', active ? 'true' : 'false'); }); elements.rangeButtons.forEach((button) => { const active = button.dataset.range === viewRange; button.classList.toggle('active', active); button.setAttribute('aria-pressed', active ? 'true' : 'false'); }); }
+  function chartData() { const company = currentCompany(); return engine.filterCandlesByRange(engine.aggregateCandles(company.candles, viewTimeframe), viewRange, state.currentDate); }
+  function renderChart(forceFit) { const data = chartData(); const modeKey = viewTimeframe + ':' + viewRange; const fit = forceFit === true || modeKey !== lastChartModeKey; lastChartModeKey = modeKey; chart.setData(data, state.trades, { fit, notifySelection: true }); if (fit && data.length) chart.selectLatest(); }
+  function timeframeLabel() { if (viewTimeframe === '1w') return '週足'; if (viewTimeframe === '1m') return '月足'; return '日足'; }
+  function renderCandleDetail(candle) { if (!candle) return; const startDate = candle.startDate || candle.date; const endDate = candle.endDate || candle.date; const periodText = startDate === endDate ? formatDate(endDate) : formatDate(startDate) + ' ～ ' + formatDate(endDate); const base = candle.open || 0; const change = base > 0 ? ((candle.close / base) - 1) * 100 : 0; elements.detailPeriod.textContent = timeframeLabel(); elements.detailDate.textContent = periodText; elements.detailOpen.textContent = formatMoney(candle.open); elements.detailHigh.textContent = formatMoney(candle.high); elements.detailLow.textContent = formatMoney(candle.low); elements.detailClose.textContent = formatMoney(candle.close); elements.detailChange.textContent = (change >= 0 ? '+' : '') + formatNumber(change, 2) + '%'; setSignedClass(elements.detailChange, change); elements.detailRange.textContent = formatMoney(candle.high - candle.low); elements.detailVolume.textContent = formatVolume(candle.volume); }
+  function renderStats() { const company = currentCompany(); const stats = engine.marketStats(company, state.currentDate); elements.stat52High.textContent = formatMoney(stats.high52); elements.stat52Low.textContent = formatMoney(stats.low52); elements.stat20High.textContent = formatMoney(stats.highAll); elements.stat20Low.textContent = formatMoney(stats.lowAll); elements.statVolume.textContent = formatVolume(stats.volume); elements.statMarketCap.textContent = formatNumber(company.marketCap, 1) + '億円'; elements.statPer.textContent = formatNumber(company.per, 1) + '倍'; }
+  function renderPortfolio() { const portfolio = engine.portfolioValue(state); const position = currentPosition(); elements.portfolioTotal.textContent = formatMoney(portfolio.total); elements.portfolioCash.textContent = formatMoney(portfolio.cash); elements.positionQty.textContent = formatNumber(position.quantity, 0) + '株'; elements.portfolioProfit.textContent = formatMoney(portfolio.profit); elements.averagePrice.textContent = position.quantity ? formatMoney(position.averagePrice) : '-'; setSignedClass(elements.portfolioProfit, portfolio.profit); }
+  function renderTradeLog() { const fragment = document.createDocumentFragment(); const recent = state.trades.slice(0, 12); if (!recent.length) { const item = document.createElement('li'); item.textContent = 'まだ売買していません。'; fragment.appendChild(item); } else { for (const trade of recent) { const item = document.createElement('li'); item.textContent = formatDate(trade.date) + ' ' + (trade.side === 'buy' ? '買い ' : '売り ') + formatNumber(trade.quantity, 0) + '株 @ ' + formatMoney(trade.price); fragment.appendChild(item); } } elements.tradeLog.replaceChildren(fragment); }
+  function renderAll(options) { const opts = options || {}; renderIdentity(); renderControls(); renderChart(opts.fitChart === true); renderStats(); renderPortfolio(); renderTradeLog(); elements.undoAction.disabled = undoStack.length === 0; }
+  function applyPrice(value, group) { rememberContinuous(group); engine.setCurrentPrice(state, value); renderIdentity(); renderControls(); renderChart(false); renderStats(); renderPortfolio(); chart.selectLatest(); scheduleSave(); }
+  function updateCompanyField(field, value, group) { rememberContinuous(group); engine.updateCompany(state, { [field]: value }); renderIdentity(); renderControls(); renderChart(false); renderStats(); renderPortfolio(); scheduleSave(); }
+  function advance(days, remember) { if (remember !== false) rememberDiscrete(); engine.stepMarket(state, days); renderAll({ fitChart: false }); chart.selectLatest(); scheduleSave(); }
+  function setPlaying(enabled) { clearInterval(playTimer); playTimer = null; elements.togglePlay.setAttribute('aria-pressed', enabled ? 'true' : 'false'); elements.togglePlay.textContent = enabled ? '停止する' : '自動で進める'; if (!enabled) return; playTimer = setInterval(() => advance(1, false), Number(elements.playSpeed.value) || 900); }
+  function applyTrade(side) { const before = compactSnapshot(); state.allowNegativeCash = elements.allowNegativeCash.checked; state.allowShort = elements.allowShort.checked; state.tradeFeePercent = engine.clamp(Number(elements.tradeFee.value) || 0, 0, 10); const result = engine.executeTrade(state, side, elements.tradeQuantity.value); if (!result.ok) { state = storage.validateState(JSON.parse(before)); announce(elements.tradeMessage, result.message, true); renderAll(); return; } pushUndo(before); announce(elements.tradeMessage, (side === 'buy' ? '買いました。' : '売りました。') + formatNumber(result.trade.quantity, 0) + '株 @ ' + formatMoney(result.trade.price), false); renderAll(); scheduleSave(); }
+  function applyFictionEvent(button) { rememberDiscrete(); let percent = Number(button.dataset.percent); let label = button.dataset.label || '架空イベント'; if (button.dataset.random === 'true') { percent = Math.round(-95 + Math.random() * 595); label = '原因不明の相場'; } engine.applyFictionEvent(state, percent); announce(elements.eventMessage, label + '。株価が' + (percent >= 0 ? '+' : '') + formatNumber(percent, 0) + '%動きました。すべて架空です。', false); renderAll(); chart.selectLatest(); scheduleSave(); }
   elements.companyName.addEventListener('change', () => { rememberDiscrete(); engine.updateCompany(state, { name: elements.companyName.value }); renderIdentity(); renderControls(); renderTradeLog(); scheduleSave(); });
   elements.companyTicker.addEventListener('change', () => { rememberDiscrete(); engine.updateCompany(state, { ticker: elements.companyTicker.value }); renderControls(); scheduleSave(); });
   elements.priceSlider.addEventListener('input', () => applyPrice(sliderToPrice(elements.priceSlider.value), 'price-slider'));
@@ -125,36 +53,24 @@
   elements.driftNumber.addEventListener('input', () => { const value = Number(elements.driftNumber.value); if (Number.isFinite(value)) updateCompanyField('drift', value, 'drift-number'); });
   elements.moodSlider.addEventListener('input', () => { rememberContinuous('mood-slider'); state.marketMood = engine.clamp(Number(elements.moodSlider.value) || 0, -100, 100); renderControls(); scheduleSave(); });
   elements.moodNumber.addEventListener('input', () => { const value = Number(elements.moodNumber.value); if (!Number.isFinite(value)) return; rememberContinuous('mood-number'); state.marketMood = engine.clamp(value, -100, 100); renderControls(); scheduleSave(); });
-  elements.quickPriceButtons.forEach((button) => button.addEventListener('click', () => { rememberDiscrete(); engine.adjustCurrentPrice(state, Number(button.dataset.percent) || 0); renderAll(); scheduleSave(); }));
-  elements.timeframeButtons.forEach((button) => button.addEventListener('click', () => { timeframe = button.dataset.timeframe || '1d'; selectedBar = null; chart.resetView(); renderModeButtons(); renderChart(); }));
-  elements.rangeButtons.forEach((button) => button.addEventListener('click', () => { range = button.dataset.range || '3m'; selectedBar = null; chart.resetView(); renderModeButtons(); renderChart(); }));
+  elements.quickPriceButtons.forEach((button) => button.addEventListener('click', () => { rememberDiscrete(); engine.adjustCurrentPrice(state, Number(button.dataset.percent) || 0); renderAll(); chart.selectLatest(); scheduleSave(); }));
+  elements.fictionEventButtons.forEach((button) => button.addEventListener('click', () => applyFictionEvent(button)));
   elements.step1.addEventListener('click', () => advance(1)); elements.step5.addEventListener('click', () => advance(5)); elements.step20.addEventListener('click', () => advance(20));
   elements.togglePlay.addEventListener('click', () => { if (playTimer) { setPlaying(false); persistNow(); return; } rememberDiscrete(); setPlaying(true); }); elements.playSpeed.addEventListener('change', () => { if (playTimer) setPlaying(true); });
-  elements.chartOlder.addEventListener('click', () => chart.panBy(20)); elements.chartNewer.addEventListener('click', () => chart.panBy(-20)); elements.chartZoomIn.addEventListener('click', () => chart.zoomBy(0.8)); elements.chartZoomOut.addEventListener('click', () => chart.zoomBy(1.25)); elements.chartReset.addEventListener('click', () => chart.resetView());
+  elements.chartOlder.addEventListener('click', () => chart.panBy(30)); elements.chartNewer.addEventListener('click', () => chart.panBy(-30)); elements.chartZoomIn.addEventListener('click', () => chart.zoomBy(0.8)); elements.chartZoomOut.addEventListener('click', () => chart.zoomBy(1.25)); elements.chartReset.addEventListener('click', () => chart.resetView()); elements.chartFit.addEventListener('click', () => chart.fitData());
+  elements.timeframeButtons.forEach((button) => button.addEventListener('click', () => { viewTimeframe = button.dataset.timeframe || '1d'; renderControls(); renderChart(true); }));
+  elements.rangeButtons.forEach((button) => button.addEventListener('click', () => { viewRange = button.dataset.range || '1y'; renderControls(); renderChart(true); }));
   elements.quantityButtons.forEach((button) => button.addEventListener('click', () => { elements.tradeQuantity.value = button.dataset.quantity || '100'; })); elements.buyButton.addEventListener('click', () => applyTrade('buy')); elements.sellButton.addEventListener('click', () => applyTrade('sell'));
   elements.logicMode.addEventListener('change', () => { rememberDiscrete(); engine.updateCompany(state, { logicMode: elements.logicMode.value }); renderAll(); scheduleSave(); });
   elements.sensitivityNumber.addEventListener('change', () => { rememberDiscrete(); engine.updateCompany(state, { sensitivity: Number(elements.sensitivityNumber.value) }); renderControls(); scheduleSave(); });
-  elements.calendarMode.addEventListener('change', () => { rememberDiscrete(); state.calendarMode = elements.calendarMode.value === 'everyday' ? 'everyday' : 'weekdays'; renderIdentity(); renderControls(); scheduleSave(); });
-  elements.allowNegativeCash.addEventListener('change', () => { rememberDiscrete(); state.allowNegativeCash = elements.allowNegativeCash.checked; scheduleSave(); }); elements.allowShort.addEventListener('change', () => { rememberDiscrete(); state.allowShort = elements.allowShort.checked; scheduleSave(); });
-  elements.tradeFee.addEventListener('change', () => { rememberDiscrete(); state.tradeFeePercent = engine.clamp(Number(elements.tradeFee.value) || 0, 0, 10); renderControls(); scheduleSave(); });
-  elements.undoAction.addEventListener('click', () => { const previous = undoStack.pop(); if (!previous) return; setPlaying(false); state = storage.validateState(previous); chart.resetView(); renderAll(); persistNow(); announce(elements.dataMessage, '1つ前の状態に戻しました。', false); });
-  elements.resetData.addEventListener('click', () => { if (!window.confirm('テスト企業、日付、チャート、売買履歴を初期状態へ戻しますか。')) return; rememberDiscrete(); setPlaying(false); state = engine.createDefaultState(); timeframe = '1d'; range = '3m'; chart.resetView(); renderAll(); persistNow(); announce(elements.dataMessage, '株価1,000円の初期状態へ戻しました。', false); });
+  elements.calendarMode.addEventListener('change', () => { rememberDiscrete(); state.calendarMode = elements.calendarMode.value === 'everyday' ? 'everyday' : 'weekdays'; renderControls(); announce(elements.dataMessage, state.calendarMode === 'everyday' ? 'これから先は土日や年末年始も日付が進む365日市場です。' : 'これから先は土日と簡易年末年始休場を飛ばします。', false); scheduleSave(); });
+  elements.allowNegativeCash.addEventListener('change', () => { rememberDiscrete(); state.allowNegativeCash = elements.allowNegativeCash.checked; scheduleSave(); }); elements.allowShort.addEventListener('change', () => { rememberDiscrete(); state.allowShort = elements.allowShort.checked; scheduleSave(); }); elements.tradeFee.addEventListener('change', () => { rememberDiscrete(); state.tradeFeePercent = engine.clamp(Number(elements.tradeFee.value) || 0, 0, 10); renderControls(); scheduleSave(); });
+  elements.undoAction.addEventListener('click', () => { const previous = undoStack.pop(); if (!previous) return; setPlaying(false); state = storage.validateState(JSON.parse(previous)); lastChartModeKey = ''; renderAll({ fitChart: true }); persistNow(); announce(elements.dataMessage, '1つ前の状態に戻しました。', false); });
+  elements.resetData.addEventListener('click', () => { rememberDiscrete(); setPlaying(false); state = engine.createDefaultState(); viewTimeframe = '1d'; viewRange = '1y'; lastChartModeKey = ''; renderAll({ fitChart: true }); persistNow(); announce(elements.dataMessage, '確認なしで最初からに戻しました。「1つ戻す」で元へ戻せます。', false); });
   elements.exportData.addEventListener('click', () => { try { storage.exportState(state); announce(elements.dataMessage, 'JSONバックアップを書き出しました。', false); } catch (error) { announce(elements.dataMessage, error instanceof Error ? error.message : '書き出せませんでした。', true); } });
-  elements.importData.addEventListener('change', async () => { const file = elements.importData.files && elements.importData.files[0]; if (!file) return; try { const imported = await storage.importFile(file); rememberDiscrete(); setPlaying(false); state = imported; timeframe = '1d'; range = '3m'; chart.resetView(); renderAll(); persistNow(); announce(elements.dataMessage, 'JSONバックアップを読み込みました。', false); } catch (error) { announce(elements.dataMessage, error instanceof Error ? error.message : 'JSONを読み込めませんでした。', true); } finally { elements.importData.value = ''; } });
-
-  elements.priceDragHandle.addEventListener('pointerdown', (event) => { rememberContinuous('chart-price-drag'); const company = currentCompany(); priceDrag = { pointerId: event.pointerId, startY: event.clientY, startPrice: company.price }; elements.priceDragHandle.setPointerCapture(event.pointerId); elements.priceDragHandle.classList.add('dragging'); });
-  elements.priceDragHandle.addEventListener('pointermove', (event) => { if (!priceDrag || priceDrag.pointerId !== event.pointerId) return; const factor = Math.exp((priceDrag.startY - event.clientY) / 160); engine.setCurrentPrice(state, priceDrag.startPrice * factor); renderIdentity(); renderControls(); renderChart(); renderPortfolio(); scheduleSave(); });
-  const endPriceDrag = (event) => { if (!priceDrag || priceDrag.pointerId !== event.pointerId) return; priceDrag = null; elements.priceDragHandle.classList.remove('dragging'); };
-  elements.priceDragHandle.addEventListener('pointerup', endPriceDrag); elements.priceDragHandle.addEventListener('pointercancel', endPriceDrag);
-  elements.priceDragHandle.addEventListener('keydown', (event) => { const company = currentCompany(); let percent = 0; if (event.key === 'ArrowUp') percent = event.shiftKey ? 5 : 1; else if (event.key === 'ArrowDown') percent = event.shiftKey ? -5 : -1; else if (event.key === 'Home') { rememberDiscrete(); engine.setCurrentPrice(state, engine.MIN_PRICE); renderAll(); scheduleSave(); event.preventDefault(); return; } else if (event.key === 'End') { rememberDiscrete(); engine.setCurrentPrice(state, engine.MAX_PRICE); renderAll(); scheduleSave(); event.preventDefault(); return; } else return; rememberContinuous('chart-price-key'); engine.adjustCurrentPrice(state, percent); renderAll(); scheduleSave(); event.preventDefault(); });
-  document.addEventListener('visibilitychange', () => { if (document.hidden && playTimer) setPlaying(false); if (document.hidden) persistNow(); }); window.addEventListener('pagehide', persistNow);
-
-  const loaded = storage.loadState();
-  if (loaded.ok) {
-    state = loaded.state;
-    if (loaded.migrated) announce(elements.dataMessage, '旧版の保存データを日付つき新形式へ読み替えました。旧データ自体は削除していません。', false);
-  } else {
-    state = engine.createDefaultState(); if (loaded.message) announce(elements.dataMessage, loaded.message + ' 株価1,000円の初期状態を作りました。', true);
-  }
-  renderAll(); persistNow();
+  elements.importData.addEventListener('change', async () => { const file = elements.importData.files && elements.importData.files[0]; if (!file) return; try { const imported = await storage.importFile(file); rememberDiscrete(); setPlaying(false); state = imported; lastChartModeKey = ''; renderAll({ fitChart: true }); persistNow(); announce(elements.dataMessage, 'JSONバックアップを読み込みました。', false); } catch (error) { announce(elements.dataMessage, error instanceof Error ? error.message : 'JSONを読み込めませんでした。', true); } finally { elements.importData.value = ''; } });
+  let priceDrag = null; elements.priceDragHandle.addEventListener('pointerdown', (event) => { rememberContinuous('chart-price-drag'); const company = currentCompany(); priceDrag = { pointerId: event.pointerId, startY: event.clientY, startPrice: company.price }; elements.priceDragHandle.setPointerCapture(event.pointerId); elements.priceDragHandle.classList.add('dragging'); }); elements.priceDragHandle.addEventListener('pointermove', (event) => { if (!priceDrag || priceDrag.pointerId !== event.pointerId) return; const factor = Math.exp((priceDrag.startY - event.clientY) / 160); applyPrice(priceDrag.startPrice * factor, 'chart-price-drag'); }); const endPriceDrag = (event) => { if (!priceDrag || priceDrag.pointerId !== event.pointerId) return; priceDrag = null; elements.priceDragHandle.classList.remove('dragging'); }; elements.priceDragHandle.addEventListener('pointerup', endPriceDrag); elements.priceDragHandle.addEventListener('pointercancel', endPriceDrag);
+  document.addEventListener('visibilitychange', () => { if (document.hidden) { if (playTimer) setPlaying(false); persistNow(); } }); window.addEventListener('pagehide', persistNow);
+  const loaded = storage.loadState(); if (loaded.ok) { state = loaded.state; if (loaded.migrated) announce(elements.dataMessage, '旧保存データを20年履歴対応のv4へ移しました。旧保存は削除していません。', false); } else { state = engine.createDefaultState(); if (loaded.message) announce(elements.dataMessage, loaded.message + ' 新しい状態で開始しました。', true); }
+  renderAll({ fitChart: true }); chart.selectLatest(); scheduleSave();
 }());
