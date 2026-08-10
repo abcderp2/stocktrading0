@@ -115,6 +115,7 @@ def main() -> int:
     chart_text = (ROOT / "assets/js/chart.js").read_text(encoding="utf-8")
     storage_text = (ROOT / "assets/js/storage.js").read_text(encoding="utf-8")
     app_text = (ROOT / "assets/js/app.js").read_text(encoding="utf-8")
+    security_audit_text = (ROOT / "scripts/security_audit.py").read_text(encoding="utf-8")
     for needle in ["devicePixelRatio", "MAX_LOCAL_SAVE_BYTES", "SCHEMA_VERSION = 4", "START_PRICE = 1000", "HISTORY_YEARS = 20", "aggregateCandles", "filterCandlesByRange", "marketStats", "volume"]:
         if needle not in js_text: failures.append(f"runtime contract missing: {needle}")
     match = re.search(r"MAX_CANDLES\s*=\s*(\d+)", engine_text)
@@ -124,6 +125,8 @@ def main() -> int:
     if "stocktrading0.state.v4" not in storage_text or "stocktrading0.state.v3" not in storage_text: failures.append("v4 storage or v3 legacy migration key is missing")
     if "window.confirm" in app_text: failures.append("reset must be immediate and must not use window.confirm")
     if "UNDO_LIMIT = 3" not in app_text: failures.append("long-history undo memory cap is missing")
+    if re.search(r"for\s+commit\s+in\s+commits\s*\[", security_audit_text): failures.append("historical secret scan must not cap reachable commits with a slice")
+    if "for commit in commits:" not in security_audit_text: failures.append("historical secret scan must cover every reachable commit")
 
     if failures:
         for failure in failures: print("ERROR:", failure)
